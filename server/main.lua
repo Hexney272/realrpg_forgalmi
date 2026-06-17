@@ -133,18 +133,54 @@ local function getOwnedVehicle(plate)
     return MySQL.single.await(query, { normalized })
 end
 
+local userColumnsCache = nil
+local function getUserColumns()
+    if userColumnsCache then return userColumnsCache end
+    userColumnsCache = {}
+
+    local ok, rows = pcall(function()
+        return MySQL.query.await([[
+            SELECT `COLUMN_NAME` AS col
+            FROM `INFORMATION_SCHEMA`.`COLUMNS`
+            WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = ?
+        ]], { Config.UsersTable })
+    end)
+
+    if ok and type(rows) == 'table' then
+        for _, r in ipairs(rows) do
+            if r and r.col then
+                userColumnsCache[tostring(r.col):lower()] = true
+            end
+        end
+    end
+
+    return userColumnsCache
+end
+
 local function getOwnerName(identifier)
     if not identifier then return 'Ismeretlen tulajdonos' end
 
-    local query = ([[
-        SELECT `%s` AS firstname, `%s` AS lastname, `%s` AS name
-        FROM `%s`
-        WHERE `%s` = ?
-        LIMIT 1
-    ]]):format(
-        Config.UsersFirstnameColumn,
-        Config.UsersLastnameColumn,
-        Config.UsersNameColumn,
+    local cols = getUserColumns()
+    local selectParts = {}
+
+    local firstCol = Config.UsersFirstnameColumn
+    local lastCol = Config.UsersLastnameColumn
+    local nameCol = Config.UsersNameColumn
+
+    -- Ha nem sikerült beolvasni az oszloplistát, próbáljuk a configban megadottakat.
+    local schemaKnown = next(cols) ~= nil
+    local hasFirst = firstCol and (not schemaKnown or cols[firstCol:lower()])
+    local hasLast = lastCol and (not schemaKnown or cols[lastCol:lower()])
+    local hasName = nameCol and schemaKnown and cols[nameCol:lower()]
+
+    if hasFirst then selectParts[#selectParts + 1] = ('`%s` AS firstname'):format(firstCol) end
+    if hasLast then selectParts[#selectParts + 1] = ('`%s` AS lastname'):format(lastCol) end
+    if hasName then selectParts[#selectParts + 1] = ('`%s` AS name'):format(nameCol) end
+
+    if #selectParts == 0 then return tostring(identifier) end
+
+    local query = ('SELECT %s FROM `%s` WHERE `%s` = ? LIMIT 1'):format(
+        table.concat(selectParts, ', '),
         Config.UsersTable,
         Config.UsersIdentifierColumn
     )
