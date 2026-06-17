@@ -314,7 +314,7 @@ local function upsertInspection(src, data, selectedFuel)
         INSERT INTO `vehicle_documents`
         (`plate`, `owner_identifier`, `owner_name`, `model_name`, `model_label`, `vin`, `engine_code`, `fuel_text`, `tier`,
          `inspection_done_at`, `inspection_valid_until`, `status`, `invalid_reason`, `serial`, `display_data`, `properties`, `last_seen_hash`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             `owner_identifier` = VALUES(`owner_identifier`),
             `owner_name` = VALUES(`owner_name`),
@@ -345,7 +345,6 @@ local function upsertInspection(src, data, selectedFuel)
         now,
         validUntil,
         'inspected',
-        nil,
         serial,
         safeEncode(display),
         safeEncode(data.properties),
