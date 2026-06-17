@@ -515,6 +515,24 @@ local function buildDocumentPayload(doc)
     }
 end
 
+RegisterNetEvent('realrpg_forgalmi:server:requestService', function(plate)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate then
+        notify(src, 'Nem található rendszám.', 'error')
+        return
+    end
+
+    local owned, xPlayer, ownerErr = validateOwner(src, plate)
+    if ownerErr then
+        notify(src, ownerErr, 'error')
+        return
+    end
+
+    -- A jármű a sajátod -> jelezzük a kliensnek, hogy nyithatja a NUI-t.
+    TriggerClientEvent('realrpg_forgalmi:client:serviceApproved', src, plate)
+end)
+
 RegisterNetEvent('realrpg_forgalmi:server:runInspection', function(vehicleData, selections)
     local src = source
     local data, err = ensureVehicleData(vehicleData)

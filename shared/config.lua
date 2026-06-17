@@ -44,9 +44,29 @@ Config.InvalidateOnModification = true
 Config.ModificationCheckIntervalMs = 12000
 Config.VehicleSearchRadius = 8.0
 
+-- MŰSZAKI VIZSGA HELYSZÍN: real_markers marker (a szerviz NPC helyett).
+-- A marker felett ÁLLVA, a SAJÁT járművedben (vezetőülésben) ülve nyílik meg a NUI.
+Config.ServiceMarker = {
+    Enabled = true,                 -- true: a real_markers markert használja az NPC helyett
+    Resource = 'real_markers',      -- a marker resource neve
+    Id = 'realrpg_inspection',      -- egyedi marker azonosító
+    Style = 'real_inspection',      -- real_markers style (MŰSZAKI VIZSGA)
+    Coords = vec3(-347.28, -133.46, 38.01),
+    Title = 'MŰSZAKI VIZSGA',
+    Subtitle = 'Ülj a járművedbe és nyomd meg az E-t',
+    HelpText = '~INPUT_CONTEXT~ Műszaki vizsga (ülj a saját járművedben)',
+    DrawDistance = 30.0,
+    InteractDistance = 3.5,
+    RequireOwnVehicle = true,       -- csak a saját (owned_vehicles) járművedre nyíljon meg
+    RequireDriverSeat = true        -- a vezetőülésben kell ülnöd
+}
+
 -- NPC-k / helyszínek. Írd át a saját pályádhoz.
+-- A szerviz (műszaki) NPC alapból KI van kapcsolva, mert a Config.ServiceMarker
+-- markert használjuk helyette. Ha mégis NPC-t szeretnél, állítsd ServiceMarker.Enabled = false-ra
+-- és ServiceNpc.Enabled = true-ra.
 Config.ServiceNpc = {
-    Enabled = true,
+    Enabled = false,
     Model = 's_m_m_autoshop_01',
     Coords = { x = -347.28, y = -133.46, z = 38.01, w = 70.0 },
     Label = 'Műszaki vizsga',

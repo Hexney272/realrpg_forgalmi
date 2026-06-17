@@ -330,8 +330,47 @@ local function getTargetVehicle()
     return 0
 end
 
-local function openServiceMenu()
-    local vehicle = getTargetVehicle()
+local pendingService = nil
+
+local function buildServicePayload(data)
+    return {
+        company = Config.Inspection.CompanyName,
+        plate = data.plate,
+        vehicleName = data.modelLabel,
+        currency = Config.Currency,
+        inspection = {
+            label = 'Műszaki vizsga',
+            price = Config.Inspection.Price,
+            time = '00:15'
+        },
+        fuel = {
+            enabled = Config.Fuel.Enabled,
+            label = Config.Fuel.Label,
+            price = Config.Fuel.Price,
+            time = '00:05'
+        },
+        duration = {
+            repair = Config.Inspection.RepairDurationMinutes,
+            club = Config.Inspection.ClubSpeedupMinutes,
+            expected = Config.Inspection.ExpectedDurationMinutes
+        },
+        vehicleData = data
+    }
+end
+
+local function openServiceNui(data)
+    if not data then return end
+    nuiOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        action = 'openService',
+        payload = buildServicePayload(data)
+    })
+end
+
+-- Beolvassa a jármű adatait, és (ha kell) szerver oldali tulajdonos-ellenőrzést kér,
+-- mielőtt megnyitná a NUI-t. Így csak a saját járműre nyílik meg.
+local function requestService(vehicle)
     if vehicle == 0 then
         notify('Nincs jármű a közeledben.', 'error')
         return
@@ -343,35 +382,49 @@ local function openServiceMenu()
         return
     end
 
-    nuiOpen = true
-    SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openService',
-        payload = {
-            company = Config.Inspection.CompanyName,
-            plate = data.plate,
-            vehicleName = data.modelLabel,
-            currency = Config.Currency,
-            inspection = {
-                label = 'Műszaki vizsga',
-                price = Config.Inspection.Price,
-                time = '00:15'
-            },
-            fuel = {
-                enabled = Config.Fuel.Enabled,
-                label = Config.Fuel.Label,
-                price = Config.Fuel.Price,
-                time = '00:05'
-            },
-            duration = {
-                repair = Config.Inspection.RepairDurationMinutes,
-                club = Config.Inspection.ClubSpeedupMinutes,
-                expected = Config.Inspection.ExpectedDurationMinutes
-            },
-            vehicleData = data
-        }
-    })
+    if Config.ServiceMarker and Config.ServiceMarker.RequireOwnVehicle then
+        pendingService = data
+        TriggerServerEvent('realrpg_forgalmi:server:requestService', data.plate)
+    else
+        openServiceNui(data)
+    end
 end
+
+-- NPC útvonal (ha valaki visszakapcsolja a ServiceNpc-t): a legközelebbi / beülős jármű.
+local function openServiceMenu()
+    requestService(getTargetVehicle())
+end
+
+-- A real_markers marker interakciója ide fut be (E gomb a markeren).
+RegisterNetEvent('realrpg_forgalmi:client:serviceMarker', function()
+    if nuiOpen then return end
+
+    local sm = Config.ServiceMarker or {}
+    local ped = PlayerPedId()
+    local vehicle = GetVehiclePedIsIn(ped, false)
+
+    if vehicle == 0 then
+        notify('Ülj be a járművedbe, amellyel a műszaki vizsgát szeretnéd elvégeztetni.', 'error')
+        return
+    end
+
+    if sm.RequireDriverSeat and GetPedInVehicleSeat(vehicle, -1) ~= ped then
+        notify('A vezetőülésben kell ülnöd a járműben a műszaki vizsgához.', 'error')
+        return
+    end
+
+    requestService(vehicle)
+end)
+
+-- A szerver jóváhagyta (a jármű a sajátod) -> megnyitjuk a NUI-t.
+RegisterNetEvent('realrpg_forgalmi:client:serviceApproved', function(plate)
+    plate = trimPlate(plate)
+    if pendingService and trimPlate(pendingService.plate) == plate then
+        local data = pendingService
+        pendingService = nil
+        openServiceNui(data)
+    end
+end)
 
 local function issueDocumentAtOffice()
     local vehicle = getTargetVehicle()
@@ -464,6 +517,42 @@ CreateThread(function()
                 end
             }
         })
+    end
+end)
+
+-- A real_markers markerének regisztrálása (a szerviz NPC helyett).
+CreateThread(function()
+    local sm = Config.ServiceMarker
+    if not (sm and sm.Enabled) then return end
+
+    local res = sm.Resource or 'real_markers'
+    local tries = 0
+    while GetResourceState(res) ~= 'started' and tries < 50 do
+        Wait(200)
+        tries = tries + 1
+    end
+
+    if GetResourceState(res) ~= 'started' then
+        print('^3[realrpg_forgalmi]^7 A(z) ' .. res .. ' resource nem fut, a műszaki marker nem jött létre. Indítsd el a real_markers-t, vagy állítsd Config.ServiceMarker.Enabled = false-ra és Config.ServiceNpc.Enabled = true-ra.')
+        return
+    end
+
+    local ok = pcall(function()
+        exports[res]:RegisterImageMarker(sm.Id or 'realrpg_inspection', {
+            style = sm.Style or 'real_inspection',
+            coords = sm.Coords,
+            title = sm.Title,
+            subtitle = sm.Subtitle,
+            drawDistance = sm.DrawDistance or 30.0,
+            interactDistance = sm.InteractDistance or 3.0,
+            helpText = sm.HelpText or '~INPUT_CONTEXT~ Műszaki vizsga',
+            event = 'realrpg_forgalmi:client:serviceMarker',
+            serverEvent = false
+        })
+    end)
+
+    if not ok then
+        print('^1[realrpg_forgalmi]^7 Nem sikerült regisztrálni a műszaki markert a(z) ' .. res .. ' resource-ba.')
     end
 end)
 
