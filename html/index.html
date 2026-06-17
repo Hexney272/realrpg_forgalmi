@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="hu">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Forgalmi rendszer</title>
+</head>
+<body>
+    <div id="serviceApp" class="screen hidden">
+        <div class="service-box">
+            <div class="service-header">
+                <span id="serviceCompany">VAPID OF LOS SANTOS</span>
+                <button class="close-btn" data-close="true">×</button>
+            </div>
+
+            <div class="service-body">
+                <div class="service-row" data-row="inspection">
+                    <label class="checkline">
+                        <span class="fake-check" id="inspectionCheck"></span>
+                        <span class="service-name" id="inspectionLabel">Műszaki vizsga <em>(00:15)</em></span>
+                    </label>
+                    <span class="service-price" id="inspectionPrice">150 000 Ft</span>
+                </div>
+
+                <div class="service-row" data-row="fuel" id="fuelRow">
+                    <label class="checkline">
+                        <span class="fake-check" id="fuelCheck"></span>
+                        <span class="service-name" id="fuelLabel">5L üzemanyag <em>(00:05)</em></span>
+                    </label>
+                    <span class="service-price" id="fuelPrice">25 000 Ft</span>
+                </div>
+
+                <div class="service-line"></div>
+
+                <div class="total-row"><b>Összesen:</b><span id="totalPrice">0 Ft</span></div>
+                <div class="total-row"><b>Kedvezmény:</b><span>0 Ft</span></div>
+                <div class="total-row"><b>Fizetendő:</b><span id="payPrice">0 Ft</span></div>
+
+                <div class="service-line"></div>
+
+                <div class="duration-row"><b>Javítási idő:</b><span id="repairTime">0 perc</span></div>
+                <div class="duration-row"><b>SeeRPG Club gyorsítás:</b><span id="clubTime">0 perc</span></div>
+                <div class="duration-row"><b>Javítás várható ideje:</b><span id="expectedTime">0 perc</span></div>
+
+                <button id="serviceSubmit" class="yellow-button">Tételek kiválasztása</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="documentApp" class="screen hidden">
+        <div class="document-paper" id="documentPaper">
+            <div class="paper-watermark"></div>
+            <div class="right-strip"><span>SeeRPG</span><span>SeeRPG</span><span>SeeRPG</span><span>SeeRPG</span></div>
+            <div class="invalid-big hidden" id="invalidStamp">ÉRVÉNYTELEN</div>
+
+            <div class="doc-top">
+                <div>
+                    <div class="city" id="docCity">See City</div>
+                    <h1 id="docTitle">Forgalmi engedély</h1>
+                </div>
+                <div class="logo-wrap">
+                    <div class="see-logo" id="docLogo">SEE</div>
+                    <div class="serial" id="docSerial">NJ000000</div>
+                </div>
+            </div>
+
+            <div class="section-line"></div>
+
+            <div class="grid one"><span class="tag">TÍPUS:</span><span id="f_type">-</span></div>
+            <div class="grid one"><span class="tag">TULAJDONOS:</span><span id="f_owner">-</span></div>
+            <div class="section-line thin"></div>
+
+            <div class="grid two">
+                <span class="tag">ALVÁZSZÁM:</span><span id="f_vin">-</span>
+                <span class="tag">MOTORKÓD:</span><span id="f_engine_code">-</span>
+            </div>
+            <div class="grid two">
+                <span class="tag">FORGALMI RENDSZÁM:</span><span id="f_plate">-</span>
+                <span class="tag">AZONOSÍTÓ (ID):</span><span id="f_identifier">-</span>
+            </div>
+            <div class="section-line thin"></div>
+
+            <div class="grid two">
+                <span class="tag">ÜZEMANYAG:</span><span id="f_fuel">-</span>
+                <span class="tag">TIER:</span><span id="f_tier">-</span>
+            </div>
+            <div class="grid one"><span class="tag">MŰSZAKI ÉRVÉNYESSÉG:</span><span id="f_inspection">-</span></div>
+            <div class="section-line"></div>
+
+            <div class="grid three colors">
+                <span class="tag">PAINTJOB:</span><span id="f_paintjob">-</span>
+                <span class="tag">TETŐ P.J.:</span><span id="f_roofpaint">-</span>
+                <span class="tag">BELSŐ:</span><span class="color-chip" id="chip_interior"></span>
+            </div>
+            <div class="grid three colors">
+                <span class="tag">FÉNYEZÉS 1:</span><span class="color-chip blue" id="chip_primary"></span>
+                <span class="tag">FÉNYEZÉS 2:</span><span class="color-chip blue2" id="chip_secondary"></span>
+                <span class="tag">ÓRACSOPORT:</span><span class="color-chip" id="chip_dashboard"></span>
+            </div>
+            <div class="section-line"></div>
+
+            <div class="grid two">
+                <span class="tag">FELNI:</span><span id="f_rim">-</span>
+                <span class="tag">KERÉK MATRICA:</span><span id="f_rimsticker">-</span>
+            </div>
+            <div class="grid one"><span class="tag">FELNI FÉNYEZÉS:</span><span id="f_rimpaint">-</span></div>
+            <div class="section-line thin"></div>
+
+            <div class="grid two tuning">
+                <span class="tag">MOTOR:</span><span id="f_engine">-</span>
+                <span class="tag">FUTÓMŰ:</span><span id="f_suspension">-</span>
+                <span class="tag">TURBO:</span><span id="f_turbo">-</span>
+                <span class="tag">GUMI:</span><span id="f_tires">-</span>
+                <span class="tag">VÁLTÓ:</span><span id="f_transmission">-</span>
+                <span class="tag">FÉK:</span><span id="f_brakes">-</span>
+                <span class="tag">ECU:</span><span id="f_ecu">-</span>
+                <span class="tag">SÚLYCSÖKKENTÉS:</span><span id="f_weight">-</span>
+            </div>
+            <div class="section-line"></div>
+
+            <div class="grid two tuning small-lines">
+                <span class="tag">KERÉK DŐLÉSSZÖG E:</span><span id="f_frontcamber">-</span>
+                <span class="tag">KERÉK DŐLÉSSZÖG H:</span><span id="f_rearcamber">-</span>
+                <span class="tag">KERÉK NYOMTÁV E:</span><span id="f_fronttrack">-</span>
+                <span class="tag">KERÉK NYOMTÁV H:</span><span id="f_reartrack">-</span>
+                <span class="tag">FORDULÓKÖR:</span><span id="f_steering">-</span>
+                <span class="tag">ÜVEG FÓLIA:</span><span id="f_tint">-</span>
+                <span class="tag">IZZÓK:</span><span id="f_lighttype">-</span>
+                <span class="tag">IZZÓ SZÍN:</span><span id="f_lightcolor">-</span>
+                <span class="tag">EGYEDI DUDA:</span><span id="f_horn">-</span>
+                <span class="tag">BACKFIRE:</span><span id="f_backfire">-</span>
+                <span class="tag">HASMAGASSÁG:</span><span id="f_height">-</span>
+                <span class="tag">OPTIKAI TUNING:</span><span id="f_optical">-</span>
+                <span class="tag">NEON ELRENDEZÉS:</span><span id="f_neonlayout">-</span>
+                <span class="tag">NEON SZÍN:</span><span id="f_neoncolor2">-</span>
+                <span class="tag">NEON SZÍN:</span><span id="f_neoncolor">-</span>
+            </div>
+
+            <div class="section-line"></div>
+            <div class="grid one issue"><span class="tag" id="issuerLabel">KIÁLLÍTÁS IDŐPONTJA:</span><span id="f_issue">-</span></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

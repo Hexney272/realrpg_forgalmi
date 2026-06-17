@@ -1,0 +1,283 @@
+* { box-sizing: border-box; }
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: Arial, Helvetica, sans-serif;
+    background: transparent;
+    color: #eee;
+    user-select: none;
+}
+.hidden { display: none !important; }
+.screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+/* SZERVIZ NUI - 2. kép stílusa */
+.service-box {
+    width: 330px;
+    background: rgba(13, 13, 13, 0.88);
+    border-radius: 5px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.55);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.08);
+}
+.service-header {
+    height: 38px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0,0,0,.34);
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: -0.2px;
+}
+.close-btn {
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 29px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: .9;
+}
+.service-body { padding: 12px 16px 14px; }
+.service-row, .total-row, .duration-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 22px;
+    font-size: 14px;
+}
+.service-row { color: rgba(255,255,255,.88); cursor: pointer; }
+.checkline { display: flex; align-items: center; cursor: pointer; }
+.fake-check {
+    width: 15px;
+    height: 15px;
+    display: inline-block;
+    border: 2px solid rgba(255,255,255,.32);
+    border-radius: 3px;
+    margin-right: 8px;
+    background: rgba(20,20,20,.5);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,.25);
+}
+.fake-check.checked {
+    background: #e9c33e;
+    border-color: #f4d85d;
+    position: relative;
+}
+.fake-check.checked:after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #201500;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.service-name em { color: #7fc5ff; font-style: normal; font-size: 12px; }
+.service-price { color: #8acb74; font-weight: 700; }
+.service-line { height: 1px; background: rgba(255,255,255,.12); margin: 9px 0; }
+.total-row b, .duration-row b { color: #fff; }
+.total-row span { color: #67e36d; font-weight: 900; }
+.duration-row span { color: #65c8ff; font-weight: 900; }
+.yellow-button {
+    display: block;
+    width: 170px;
+    margin: 12px auto 0;
+    height: 30px;
+    border-radius: 4px;
+    border: 0;
+    background: linear-gradient(#f1c74c, #d9a926);
+    color: #3a2a00;
+    font-weight: 900;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 2px 5px rgba(0,0,0,.3);
+}
+
+/* FORGALMI ENGEDÉLY - 1. és 3. kép stílusa */
+.document-paper {
+    position: relative;
+    width: 450px;
+    min-height: 700px;
+    padding: 14px 37px 12px 13px;
+    color: #362719;
+    background:
+        radial-gradient(circle at 10% 20%, rgba(255,255,255,.18), transparent 28%),
+        linear-gradient(90deg, rgba(244,255,199,.98), rgba(215,234,139,.98));
+    border: 2px solid rgba(52,52,52,.45);
+    box-shadow: 0 15px 45px rgba(0,0,0,.58);
+    overflow: hidden;
+    font-family: 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+    transform: scale(0.96);
+}
+.paper-watermark {
+    position: absolute;
+    inset: 0 28px 0 0;
+    pointer-events: none;
+    opacity: .32;
+    background-image:
+        repeating-radial-gradient(ellipse at center, transparent 0 10px, rgba(255,255,255,.5) 11px 13px, transparent 14px 25px),
+        repeating-linear-gradient(100deg, transparent 0 17px, rgba(129,170,74,.22) 18px 20px, transparent 21px 38px);
+    background-size: 90px 78px, 58px 58px;
+}
+.right-strip {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    background:
+        linear-gradient(180deg, rgba(131,199,221,.9), rgba(85,122,206,.88)),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.3) 0 2px, transparent 2px 8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+    border-left: 1px solid rgba(54,75,111,.5);
+}
+.right-strip span {
+    transform: rotate(90deg);
+    color: rgba(255,255,255,.58);
+    font-weight: 900;
+    font-size: 15px;
+    letter-spacing: .6px;
+    text-shadow: 0 1px 1px rgba(0,0,0,.25);
+}
+.doc-top, .grid, .section-line { position: relative; z-index: 2; }
+.doc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    height: 53px;
+}
+.city {
+    font-size: 12px;
+    color: #4c6c36;
+    font-weight: 800;
+    margin-bottom: 0px;
+}
+h1 {
+    margin: 0;
+    color: #6c5327;
+    font-size: 25px;
+    line-height: 24px;
+    letter-spacing: -1px;
+    font-weight: 900;
+}
+.logo-wrap { text-align: right; }
+.see-logo {
+    display: inline-flex;
+    width: 54px;
+    height: 42px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    background: #6d4a2a;
+    color: #e8f3b5;
+    font-size: 19px;
+    font-weight: 1000;
+    letter-spacing: -1px;
+}
+.serial {
+    color: #6d4a2a;
+    font-size: 11px;
+    font-weight: 900;
+    margin-top: -1px;
+}
+.section-line {
+    height: 2px;
+    background: rgba(92,63,37,.78);
+    margin: 5px 0 7px;
+}
+.section-line.thin { height: 1px; margin: 5px 0; }
+.grid {
+    display: grid;
+    align-items: center;
+    column-gap: 7px;
+    row-gap: 4px;
+    min-height: 20px;
+    font-size: 12px;
+    font-weight: 800;
+}
+.grid.one { grid-template-columns: auto 1fr; }
+.grid.two { grid-template-columns: auto 1fr auto 1fr; }
+.grid.three { grid-template-columns: auto 1fr auto 1fr auto 1fr; }
+.tag {
+    display: inline-block;
+    background: #744f2b;
+    color: #f2edcc;
+    padding: 2px 4px 1px;
+    font-size: 11px;
+    line-height: 13px;
+    font-weight: 1000;
+    text-transform: uppercase;
+    text-shadow: 0 1px 0 rgba(0,0,0,.35);
+    white-space: nowrap;
+}
+.grid span:not(.tag):not(.color-chip) {
+    color: #312419;
+    text-shadow: 0 1px 0 rgba(255,255,255,.35);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.colors { min-height: 26px; }
+.color-chip {
+    display: inline-block;
+    width: 33px;
+    height: 20px;
+    border-radius: 3px;
+    background: #050505;
+    border: 1px solid rgba(0,0,0,.35);
+    box-shadow: inset 0 1px 2px rgba(255,255,255,.15), 0 1px 1px rgba(0,0,0,.25);
+}
+.color-chip.blue { background: #4b50ba; }
+.color-chip.blue2 { background: #3c65bf; }
+.tuning { row-gap: 3px; }
+.small-lines { font-size: 11.3px; row-gap: 2px; }
+.small-lines .tag { font-size: 10px; padding: 1px 3px 0px; line-height: 12px; }
+.issue { margin-top: 3px; }
+.invalid-big {
+    position: absolute;
+    z-index: 6;
+    left: 35px;
+    top: 310px;
+    transform: rotate(-12deg);
+    color: rgba(166, 20, 20, .78);
+    border: 7px solid rgba(166, 20, 20, .68);
+    font-size: 42px;
+    font-weight: 1000;
+    letter-spacing: 2px;
+    padding: 10px 18px 6px;
+    text-transform: uppercase;
+    border-radius: 7px;
+    text-shadow: none;
+    mix-blend-mode: multiply;
+}
+.document-paper.invalid .tag::after {
+    content: ' ÉRVÉNYTELEN';
+    color: rgba(180, 24, 24, .74);
+    background: rgba(255, 245, 210, .5);
+    border: 1px solid rgba(180, 24, 24, .45);
+    margin-left: 3px;
+    padding: 0 2px;
+    font-size: 8px;
+    line-height: 10px;
+    vertical-align: top;
+}
+@media (max-height: 760px) {
+    .document-paper { transform: scale(.86); }
+}
