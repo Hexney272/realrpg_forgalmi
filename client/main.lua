@@ -521,23 +521,14 @@ CreateThread(function()
 end)
 
 -- A real_markers markerének regisztrálása (a szerviz NPC helyett).
-CreateThread(function()
+local function registerServiceMarker()
     local sm = Config.ServiceMarker
-    if not (sm and sm.Enabled) then return end
+    if not (sm and sm.Enabled) then return false end
 
     local res = sm.Resource or 'real_markers'
-    local tries = 0
-    while GetResourceState(res) ~= 'started' and tries < 50 do
-        Wait(200)
-        tries = tries + 1
-    end
+    if GetResourceState(res) ~= 'started' then return false end
 
-    if GetResourceState(res) ~= 'started' then
-        print('^3[realrpg_forgalmi]^7 A(z) ' .. res .. ' resource nem fut, a műszaki marker nem jött létre. Indítsd el a real_markers-t, vagy állítsd Config.ServiceMarker.Enabled = false-ra és Config.ServiceNpc.Enabled = true-ra.')
-        return
-    end
-
-    local ok = pcall(function()
+    local ok, err = pcall(function()
         exports[res]:RegisterImageMarker(sm.Id or 'realrpg_inspection', {
             style = sm.Style or 'real_inspection',
             coords = sm.Coords,
@@ -551,10 +542,54 @@ CreateThread(function()
         })
     end)
 
-    if not ok then
-        print('^1[realrpg_forgalmi]^7 Nem sikerült regisztrálni a műszaki markert a(z) ' .. res .. ' resource-ba.')
+    if ok then
+        print(('^2[realrpg_forgalmi]^7 Műszaki marker regisztrálva (id=%s) a(z) %s resource-ba: %s'):format(sm.Id or 'realrpg_inspection', res, tostring(sm.Coords)))
+        return true
     end
+
+    print('^1[realrpg_forgalmi]^7 Nem sikerült regisztrálni a műszaki markert: ' .. tostring(err))
+    return false
+end
+
+CreateThread(function()
+    local sm = Config.ServiceMarker
+    if not (sm and sm.Enabled) then return end
+
+    local res = sm.Resource or 'real_markers'
+    local tries = 0
+    while GetResourceState(res) ~= 'started' and tries < 100 do
+        Wait(200)
+        tries = tries + 1
+    end
+
+    if GetResourceState(res) ~= 'started' then
+        print('^3[realrpg_forgalmi]^7 A(z) ' .. res .. ' resource nem fut (20s várakozás után sem), a műszaki marker nem jött létre. Indítsd el a real_markers-t (server.cfg), vagy állítsd Config.ServiceMarker.Enabled = false-ra és Config.ServiceNpc.Enabled = true-ra.')
+        return
+    end
+
+    registerServiceMarker()
 end)
+
+-- Ha a real_markers (újra)indul, regisztráljuk újra a markert, különben elveszik.
+AddEventHandler('onClientResourceStart', function(resourceName)
+    local sm = Config.ServiceMarker
+    if not (sm and sm.Enabled) then return end
+    if resourceName ~= (sm.Resource or 'real_markers') then return end
+    CreateThread(function()
+        Wait(1500) -- megvárjuk, amíg a real_markers kliens oldala feláll
+        registerServiceMarker()
+    end)
+end)
+
+-- Diagnosztikai parancs: F8 konzolban kiírja az állapotot és újraregisztrál.
+RegisterCommand('forgalmi_marker_debug', function()
+    local sm = Config.ServiceMarker or {}
+    local res = sm.Resource or 'real_markers'
+    print(('^5[realrpg_forgalmi]^7 ServiceMarker.Enabled=%s | %s state=%s | Coords=%s'):format(
+        tostring(sm.Enabled), res, GetResourceState(res), tostring(sm.Coords)))
+    local done = registerServiceMarker()
+    notify(done and 'Marker újraregisztrálva. Nézd az F8 konzolt.' or ('A(z) ' .. res .. ' nem fut vagy a marker ki van kapcsolva. Lásd F8.'), done and 'success' or 'error')
+end, false)
 
 CreateThread(function()
     if not Config.InvalidateOnModification then return end
