@@ -161,7 +161,8 @@ Config.Extras = {
         Enabled = true,
         Price = 75000,
         ValidityDays = 30,
-        Label = 'Kötelező biztosítás'
+        Label = 'Kötelező biztosítás',
+        ItemName = 'kotelezo_biztositas'
     },
     Tax = {
         Enabled = true,

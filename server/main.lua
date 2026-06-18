@@ -667,6 +667,35 @@ CreateThread(function()
         registeredItem = true
     end
 
+    -- Biztosítás item használat
+    if ESX.RegisterUsableItem and Config.Extras and Config.Extras.Insurance and Config.Extras.Insurance.ItemName then
+        ESX.RegisterUsableItem(Config.Extras.Insurance.ItemName, function(source, item)
+            local plate = item and item.metadata and item.metadata.plate
+            plate = trimPlate(plate)
+            if not plate then
+                notify(source, 'Ez a biztosítás nem tartalmaz rendszám adatot.', 'error')
+                return
+            end
+            local doc = getDocumentByPlate(plate)
+            if not doc then
+                notify(source, 'A jármű adatai nem találhatók.', 'error')
+                return
+            end
+            local ownerName = getOwnerName(doc.owner_identifier)
+            local payload = {
+                plate = plate,
+                owner = ownerName,
+                modelLabel = doc.model_label or 'Ismeretlen',
+                validUntil = humanDate(doc.insurance_valid_until),
+                issuedAt = humanDate(doc.updated_at or doc.created_at),
+                serial = 'BIZ-' .. tostring(math.random(100000, 999999)),
+                price = Config.Extras.Insurance.Price or 75000,
+                currency = Config.Currency
+            }
+            TriggerClientEvent('realrpg_forgalmi:client:openInsurance', source, payload)
+        end)
+    end
+
     print('^2[realrpg_forgalmi]^7 elindult. Item: ' .. Config.ItemName)
 end)
 
@@ -1107,6 +1136,45 @@ RegisterNetEvent('realrpg_forgalmi:server:buyInsuranceByPlate', function(plate)
 
     local untilDate = sqlDateAfterDays(Config.Extras.Insurance.ValidityDays or 30)
     MySQL.update.await('UPDATE `vehicle_documents` SET `insurance_valid_until` = ? WHERE `plate` = ?', { untilDate, plate })
+
+    -- Item adás
+    local itemName = Config.Extras.Insurance.ItemName or 'kotelezo_biztositas'
+    local ownerName = getOwnerName(owned.owner)
+    local doc = getDocumentByPlate(plate)
+    local modelLabel = (doc and doc.model_label) or 'Ismeretlen'
+
+    local metadata = {
+        plate = plate,
+        description = ('Rendszám: %s | Érvényes: %s'):format(plate, humanDate(untilDate)),
+        label = ('Biztosítás - %s'):format(plate)
+    }
+
+    -- Meglévő item frissítés vagy új adás
+    local slots = exports.ox_inventory:Search(src, 'slots', itemName) or {}
+    local found = false
+    for _, item in pairs(slots) do
+        if item and item.metadata and trimPlate(item.metadata.plate) == plate then
+            exports.ox_inventory:SetMetadata(src, item.slot, metadata)
+            found = true
+            break
+        end
+    end
+    if not found then
+        exports.ox_inventory:AddItem(src, itemName, 1, metadata)
+    end
+
+    -- NUI megnyitás: biztosítási okmány megjelenítése
+    local payload = {
+        plate = plate,
+        owner = ownerName,
+        modelLabel = modelLabel,
+        validUntil = humanDate(untilDate),
+        issuedAt = humanDate(sqlNow()),
+        serial = 'BIZ-' .. tostring(math.random(100000, 999999)),
+        price = price,
+        currency = Config.Currency
+    }
+    TriggerClientEvent('realrpg_forgalmi:client:openInsurance', src, payload)
     notify(src, 'Kötelező biztosítás megkötve. Lejárat: ' .. humanDate(untilDate), 'success')
 end)
 

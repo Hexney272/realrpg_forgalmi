@@ -6,6 +6,7 @@ const serviceApp = $('serviceApp');
 const documentApp = $('documentApp');
 const documentPaper = $('documentPaper');
 const officeApp = $('officeApp');
+const insuranceApp = $('insuranceApp');
 let officeState = null;
 let selectedPlate = null;
 
@@ -26,6 +27,7 @@ function closeAll() {
     serviceApp.classList.add('hidden');
     documentApp.classList.add('hidden');
     officeApp.classList.add('hidden');
+    insuranceApp.classList.add('hidden');
     post('close');
 }
 
@@ -151,15 +153,32 @@ function openDocument(payload) {
     documentApp.classList.remove('hidden');
 }
 
+function openInsurance(payload) {
+    setText('ins_serial', payload.serial || '-');
+    setText('ins_owner', payload.owner || '-');
+    setText('ins_vehicle', payload.modelLabel || '-');
+    setText('ins_plate', payload.plate || '-');
+    setText('ins_valid', payload.validUntil || '-');
+    setText('ins_issued', payload.issuedAt || '-');
+    setText('ins_price', fmtMoney(payload.price, payload.currency));
+
+    serviceApp.classList.add('hidden');
+    documentApp.classList.add('hidden');
+    officeApp.classList.add('hidden');
+    insuranceApp.classList.remove('hidden');
+}
+
 window.addEventListener('message', (event) => {
     const data = event.data || {};
     if (data.action === 'openService') openService(data.payload || {});
     if (data.action === 'openDocument') openDocument(data.payload || {});
     if (data.action === 'openOffice') openOffice(data.payload || {});
+    if (data.action === 'openInsurance') openInsurance(data.payload || {});
     if (data.action === 'forceClose') {
         serviceApp.classList.add('hidden');
         documentApp.classList.add('hidden');
         officeApp.classList.add('hidden');
+        insuranceApp.classList.add('hidden');
     }
 });
 

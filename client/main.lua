@@ -448,12 +448,6 @@ local function openServiceMenu()
 end
 
 local function issueDocumentAtOffice()
-    -- Az okmányirodánál NEM kell járműben ülni. A szerver lekérdezi a játékos járműveit.
-    if Config.Extras and Config.Extras.OfficeQueue and Config.Extras.OfficeQueue.Enabled then
-        local num = math.random(1, 999)
-        notify(('Sorszám: %s-%03d | Ügyintézés folyamatban...'):format(Config.Extras.OfficeQueue.Prefix or 'A', num), 'info')
-        Wait(Config.Extras.OfficeQueue.DurationMs or 15000)
-    end
     TriggerServerEvent('realrpg_forgalmi:server:getOfficeVehicles')
 end
 
@@ -516,6 +510,12 @@ RegisterNetEvent('realrpg_forgalmi:client:openOffice', function(data)
     nuiOpen = true
     SetNuiFocus(true, true)
     SendNUIMessage({ action = 'openOffice', payload = data })
+end)
+
+RegisterNetEvent('realrpg_forgalmi:client:openInsurance', function(payload)
+    nuiOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({ action = 'openInsurance', payload = payload })
 end)
 
 RegisterCommand('forgalmi_jarmu', function()
