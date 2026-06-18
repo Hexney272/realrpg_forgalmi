@@ -57,19 +57,20 @@ Config.ServiceNpc = {
 Config.OfficeNpc = {
     Enabled = true,
     Model = 'a_f_y_business_01',
-    Coords = { x = -552.67, y = -192.62, z = 37.22, w = 210.0 },
+    Coords = { x = -542.14, y = -208.54, z = 37.64, w = 210.0 },
     Label = 'Forgalmi engedély kiállítása',
     Icon = 'fa-solid fa-id-card',
-    Name = 'Kovács Anna'  -- Ez jelenik meg az NPC feje felett
+    Name = 'Kovács Anna',
+    Title = 'OkmányIroda'
 }
 
 -- Okmányiroda marker (real_markers): az NPC előtt, szöveg/badge nélkül.
 Config.OfficeMarker = {
-    Enabled = true,
+    Enabled = false,
     Resource = 'real_markers',
     Id = 'realrpg_office',
     Style = 'document',
-    Coords = vec3(-552.67, -192.62, 37.22),
+    Coords = vec3(-542.14, -208.54, 37.64),
     DrawDistance = 25.0,
     InteractDistance = 2.5,
     HelpText = '~INPUT_CONTEXT~ Forgalmi engedély kiállítása',

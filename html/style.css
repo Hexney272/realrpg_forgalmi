@@ -281,3 +281,60 @@ h1 {
 @media (max-height: 760px) {
     .document-paper { transform: scale(.86); }
 }
+
+
+
+/* OKMÁNYIRODA */
+.office-box {
+    width: 360px;
+    background: rgba(13, 13, 13, 0.92);
+    border-radius: 5px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.55);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.08);
+}
+.office-body { padding: 12px 16px 14px; }
+.office-vehicle-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.office-vehicle-item {
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px;
+    background: rgba(255,255,255,.04);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color .12s, background .12s;
+}
+.office-vehicle-item:hover { border-color: rgba(255,204,50,.5); background: rgba(255,204,50,.06); }
+.office-vehicle-item.active { border-color: rgba(255,204,50,.7); background: rgba(255,204,50,.1); }
+.office-vehicle-item .plate { font-weight: 900; font-size: 14px; color: #fff; }
+.office-vehicle-item .model { font-size: 12px; color: rgba(255,255,255,.6); }
+.office-vehicle-item .status { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+.office-vehicle-item .status.inspected { background: rgba(100,200,255,.15); color: #65c8ff; }
+.office-vehicle-item .status.valid { background: rgba(100,230,120,.15); color: #67e36d; }
+.office-actions { margin-top: 8px; }
+.office-selected { font-size: 13px; color: rgba(255,255,255,.7); margin-bottom: 10px; text-align: center; }
+.office-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    height: 34px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.office-btn:hover { background: rgba(255,204,50,.12); border-color: rgba(255,204,50,.4); }
+.office-btn:first-child { background: linear-gradient(#f1c74c, #d9a926); color: #3a2a00; border: 0; font-weight: 900; }

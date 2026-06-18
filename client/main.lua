@@ -448,14 +448,13 @@ local function openServiceMenu()
 end
 
 local function issueDocumentAtOffice()
-    -- Az okmányirodánál NEM kell járműben ülni. A szerver a DB-ből kikeresi
-    -- a játékos legutolsó érvényes műszaki vizsgával rendelkező járművét.
+    -- Az okmányirodánál NEM kell járműben ülni. A szerver lekérdezi a játékos járműveit.
     if Config.Extras and Config.Extras.OfficeQueue and Config.Extras.OfficeQueue.Enabled then
         local num = math.random(1, 999)
         notify(('Sorszám: %s-%03d | Ügyintézés folyamatban...'):format(Config.Extras.OfficeQueue.Prefix or 'A', num), 'info')
         Wait(Config.Extras.OfficeQueue.DurationMs or 15000)
     end
-    TriggerServerEvent('realrpg_forgalmi:server:issueDocumentWalk')
+    TriggerServerEvent('realrpg_forgalmi:server:getOfficeVehicles')
 end
 
 RegisterNUICallback('close', function(_, cb)
@@ -480,6 +479,26 @@ RegisterNUICallback('serviceSubmit', function(payload, cb)
     cb(true)
 end)
 
+RegisterNUICallback('officeAction', function(payload, cb)
+    nuiOpen = false
+    SetNuiFocus(false, false)
+    if not payload or not payload.plate then cb(false) return end
+
+    local action = payload.action
+    local plate = payload.plate
+
+    if action == 'issueDocument' then
+        TriggerServerEvent('realrpg_forgalmi:server:issueDocumentByPlate', plate)
+    elseif action == 'buyInsurance' then
+        TriggerServerEvent('realrpg_forgalmi:server:buyInsuranceByPlate', plate)
+    elseif action == 'payTax' then
+        TriggerServerEvent('realrpg_forgalmi:server:payTaxByPlate', plate)
+    elseif action == 'replaceDocument' then
+        TriggerServerEvent('realrpg_forgalmi:server:replaceDocumentByPlate', plate)
+    end
+    cb(true)
+end)
+
 RegisterNetEvent('realrpg_forgalmi:client:openDocument', function(payload)
     nuiOpen = true
     SetNuiFocus(true, true)
@@ -491,6 +510,12 @@ RegisterNetEvent('realrpg_forgalmi:client:addFuel', function(liters)
     if vehicle == 0 then return end
     local current = GetVehicleFuelLevel(vehicle)
     SetVehicleFuelLevel(vehicle, math.min(100.0, current + (tonumber(liters) or 0.0)))
+end)
+
+RegisterNetEvent('realrpg_forgalmi:client:openOffice', function(data)
+    nuiOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({ action = 'openOffice', payload = data })
 end)
 
 RegisterCommand('forgalmi_jarmu', function()
@@ -561,63 +586,6 @@ CreateThread(function()
     end
 end)
 
--- Okmányiroda marker regisztrálás (real_markers)
-RegisterNetEvent('realrpg_forgalmi:client:officeMarker', function()
-    issueDocumentAtOffice()
-end)
-
-local function registerOfficeMarker()
-    local om = Config.OfficeMarker
-    if not (om and om.Enabled) then return false end
-
-    local res = om.Resource or 'real_markers'
-    if GetResourceState(res) ~= 'started' then return false end
-
-    local ok, err = pcall(function()
-        exports[res]:RegisterImageMarker(om.Id or 'realrpg_office', {
-            style = om.Style or 'document',
-            coords = om.Coords,
-            title = '',
-            subtitle = '',
-            drawDistance = om.DrawDistance or 25.0,
-            interactDistance = om.InteractDistance or 2.5,
-            helpText = om.HelpText or '~INPUT_CONTEXT~ Forgalmi engedély kiállítása',
-            event = 'realrpg_forgalmi:client:officeMarker',
-            serverEvent = false
-        })
-    end)
-
-    if ok then
-        dprint('Okmányiroda marker regisztrálva: ' .. tostring(om.Coords))
-        return true
-    end
-    print('^1[realrpg_forgalmi]^7 Okmányiroda marker regisztráció sikertelen: ' .. tostring(err))
-    return false
-end
-
-CreateThread(function()
-    local om = Config.OfficeMarker
-    if not (om and om.Enabled) then return end
-
-    local res = om.Resource or 'real_markers'
-    local tries = 0
-    while GetResourceState(res) ~= 'started' and tries < 100 do
-        Wait(200)
-        tries = tries + 1
-    end
-    registerOfficeMarker()
-end)
-
-AddEventHandler('onClientResourceStart', function(resourceName)
-    local om = Config.OfficeMarker
-    if not (om and om.Enabled) then return end
-    if resourceName ~= (om.Resource or 'real_markers') then return end
-    CreateThread(function()
-        Wait(1500)
-        registerOfficeMarker()
-    end)
-end)
-
 -- NPC nevek megjelenítése (3D szöveg a fej felett)
 CreateThread(function()
     Wait(2000)
@@ -625,35 +593,54 @@ CreateThread(function()
         local sleep = 500
         local pcoords = GetEntityCoords(PlayerPedId())
 
-        local function drawNpcName(ped, name, coords)
-            if not ped or not DoesEntityExist(ped) or not name then return false end
+        local function drawNpcName(ped, data, coords)
+            if not ped or not DoesEntityExist(ped) then return false end
+            if not data.Name and not data.Title then return false end
             local c = coords
             local dist = #(pcoords - vector3(c.x, c.y, c.z))
             if dist > 12.0 then return false end
-            -- 3D szöveg rajzolás a ped feje fölé
             local pedCoords = GetEntityCoords(ped)
             local headZ = pedCoords.z + 1.05
-            SetDrawOrigin(pedCoords.x, pedCoords.y, headZ, 0)
-            SetTextScale(0.0, 0.32)
-            SetTextFont(4)
-            SetTextProportional(true)
-            SetTextColour(255, 255, 255, 220)
-            SetTextDropshadow(1, 0, 0, 0, 200)
-            SetTextOutline()
-            SetTextEntry('STRING')
-            SetTextCentre(true)
-            AddTextComponentString(name)
-            DrawText(0.0, 0.0)
-            ClearDrawOrigin()
+
+            if data.Title then
+                SetDrawOrigin(pedCoords.x, pedCoords.y, headZ, 0)
+                SetTextScale(0.0, 0.30)
+                SetTextFont(4)
+                SetTextProportional(true)
+                SetTextColour(255, 204, 50, 240)
+                SetTextDropshadow(1, 0, 0, 0, 200)
+                SetTextOutline()
+                SetTextEntry('STRING')
+                SetTextCentre(true)
+                AddTextComponentString(data.Title)
+                DrawText(0.0, 0.0)
+                ClearDrawOrigin()
+            end
+
+            if data.Name then
+                SetDrawOrigin(pedCoords.x, pedCoords.y, headZ, 0)
+                SetTextScale(0.0, 0.32)
+                SetTextFont(4)
+                SetTextProportional(true)
+                SetTextColour(255, 255, 255, 220)
+                SetTextDropshadow(1, 0, 0, 0, 200)
+                SetTextOutline()
+                SetTextEntry('STRING')
+                SetTextCentre(true)
+                AddTextComponentString(data.Name)
+                DrawText(0.0, 0.018)
+                ClearDrawOrigin()
+            end
+
             return true
         end
 
         local drawn = false
         if servicePed and Config.ServiceNpc and Config.ServiceNpc.Name then
-            if drawNpcName(servicePed, Config.ServiceNpc.Name, Config.ServiceNpc.Coords) then drawn = true end
+            if drawNpcName(servicePed, Config.ServiceNpc, Config.ServiceNpc.Coords) then drawn = true end
         end
         if officePed and Config.OfficeNpc and Config.OfficeNpc.Name then
-            if drawNpcName(officePed, Config.OfficeNpc.Name, Config.OfficeNpc.Coords) then drawn = true end
+            if drawNpcName(officePed, Config.OfficeNpc, Config.OfficeNpc.Coords) then drawn = true end
         end
 
         Wait(drawn and 0 or sleep)

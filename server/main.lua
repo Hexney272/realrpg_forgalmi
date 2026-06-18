@@ -40,7 +40,7 @@ local function humanDate(sqlDate)
         y, m, d, h, mi = tostring(sqlDate):match('^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d)')
     end
     if not y then return tostring(sqlDate) end
-    return ('%s. %s. %s.  %s:%s'):format(y, m, d, h, mi)
+    return ('%s. %s. %s. %s:%s'):format(y, m, d, h, mi)
 end
 
 local function randomSerial()
@@ -531,6 +531,44 @@ RegisterNetEvent('realrpg_forgalmi:server:issueDocumentWalk', function()
     issueDocument(src, data)
 end)
 
+RegisterNetEvent('realrpg_forgalmi:server:getOfficeVehicles', function()
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+
+    local identifier = xPlayer.identifier
+    local rows = MySQL.query.await([[
+        SELECT `plate`, `model_label`, `status`, `inspection_valid_until`, `insurance_valid_until`, `tax_paid_until`
+        FROM `vehicle_documents`
+        WHERE `owner_identifier` = ?
+          AND (
+            (`status` = 'inspected' AND `inspection_valid_until` IS NOT NULL AND `inspection_valid_until` >= NOW())
+            OR `status` = 'valid'
+          )
+        ORDER BY `updated_at` DESC
+    ]], { identifier })
+
+    local vehicles = {}
+    if rows then
+        for _, row in ipairs(rows) do
+            vehicles[#vehicles + 1] = {
+                plate = row.plate,
+                model_label = row.model_label or 'Ismeretlen',
+                status = row.status,
+                inspection_valid_until = row.inspection_valid_until,
+                insurance_valid_until = row.insurance_valid_until,
+                tax_paid_until = row.tax_paid_until
+            }
+        end
+    end
+
+    TriggerClientEvent('realrpg_forgalmi:client:openOffice', src, {
+        vehicles = vehicles,
+        currency = Config.Currency,
+        extras = Config.Extras
+    })
+end)
+
 RegisterNetEvent('realrpg_forgalmi:server:runInspection', function(vehicleData, selections)
     local src = source
     local data, err = ensureVehicleData(vehicleData)
@@ -1005,4 +1043,124 @@ exports('CanTakeVehicleFromGarage', function(plate)
     if g.BlockIfInsuranceExpired and not dateIsValid(doc.insurance_valid_until) then return false, 'lejárt biztosítás' end
     if g.BlockIfTaxExpired and not dateIsValid(doc.tax_paid_until) then return false, 'lejárt járműadó' end
     return true, 'ok'
+end)
+
+
+
+-- PLATE-BASED EVENTS (office NUI)
+RegisterNetEvent('realrpg_forgalmi:server:issueDocumentByPlate', function(plate)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate then return end
+
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+
+    local doc = getDocumentByPlate(plate)
+    if not doc then
+        notify(src, 'Ehhez a járműhöz nincs műszaki vizsga elvégezve.', 'error')
+        return
+    end
+
+    local owned = getOwnedVehicle(plate)
+    if not owned then
+        notify(src, 'Ez a jármű nincs a nevedre regisztrálva.', 'error')
+        return
+    end
+    if Config.OnlyOwnerCanUse and owned.owner ~= xPlayer.identifier then
+        notify(src, 'Ezt csak a jármű tulajdonosa intézheti.', 'error')
+        return
+    end
+
+    local data = {
+        plate = plate,
+        modelName = doc.model_name or 'unknown',
+        modelLabel = doc.model_label or 'Ismeretlen',
+        makeName = '',
+        modHash = doc.mod_hash or doc.last_seen_hash or '',
+        display = safeDecode(doc.display_data),
+        properties = safeDecode(doc.properties)
+    }
+
+    issueDocument(src, data)
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:buyInsuranceByPlate', function(plate)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate or not Config.Extras or not Config.Extras.Insurance or not Config.Extras.Insurance.Enabled then return end
+
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+
+    local owned = getOwnedVehicle(plate)
+    if not owned or (Config.OnlyOwnerCanUse and owned.owner ~= xPlayer.identifier) then
+        notify(src, 'Ezt csak a jármű tulajdonosa intézheti.', 'error')
+        return
+    end
+
+    local price = Config.Extras.Insurance.Price or 75000
+    if not removePlayerMoney(xPlayer, price) then
+        notify(src, ('Nincs elég pénzed. Szükséges: %s %s'):format(price, Config.Currency), 'error')
+        return
+    end
+
+    local untilDate = sqlDateAfterDays(Config.Extras.Insurance.ValidityDays or 30)
+    MySQL.update.await('UPDATE `vehicle_documents` SET `insurance_valid_until` = ? WHERE `plate` = ?', { untilDate, plate })
+    notify(src, 'Kötelező biztosítás megkötve. Lejárat: ' .. humanDate(untilDate), 'success')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:payTaxByPlate', function(plate)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate or not Config.Extras or not Config.Extras.Tax or not Config.Extras.Tax.Enabled then return end
+
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+
+    local owned = getOwnedVehicle(plate)
+    if not owned or (Config.OnlyOwnerCanUse and owned.owner ~= xPlayer.identifier) then
+        notify(src, 'Ezt csak a jármű tulajdonosa intézheti.', 'error')
+        return
+    end
+
+    local price = Config.Extras.Tax.BasePrice or 25000
+    if not removePlayerMoney(xPlayer, price) then
+        notify(src, ('Nincs elég pénzed. Szükséges: %s %s'):format(price, Config.Currency), 'error')
+        return
+    end
+
+    local untilDate = sqlDateAfterDays(Config.Extras.Tax.ValidityDays or 30)
+    MySQL.update.await('UPDATE `vehicle_documents` SET `tax_paid_until` = ? WHERE `plate` = ?', { untilDate, plate })
+    notify(src, 'Járműadó befizetve. Érvényes eddig: ' .. humanDate(untilDate), 'success')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:replaceDocumentByPlate', function(plate)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate or not Config.Extras or not Config.Extras.Replacement or not Config.Extras.Replacement.Enabled then return end
+
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+
+    local owned = getOwnedVehicle(plate)
+    if not owned or (Config.OnlyOwnerCanUse and owned.owner ~= xPlayer.identifier) then
+        notify(src, 'Ezt csak a jármű tulajdonosa intézheti.', 'error')
+        return
+    end
+
+    local doc = getDocumentByPlate(plate)
+    if not doc or doc.status ~= 'valid' then
+        notify(src, 'Ehhez a járműhöz nincs érvényes forgalmi.', 'error')
+        return
+    end
+
+    local price = Config.Extras.Replacement.Price or 50000
+    if not removePlayerMoney(xPlayer, price) then
+        notify(src, ('Nincs elég pénzed. Szükséges: %s %s'):format(price, Config.Currency), 'error')
+        return
+    end
+
+    giveOrUpdateDocumentItem(src, plate)
+    notify(src, 'Forgalmi engedély pótolva.', 'success')
 end)

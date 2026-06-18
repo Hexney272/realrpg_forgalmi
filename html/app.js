@@ -5,6 +5,9 @@ const $ = (id) => document.getElementById(id);
 const serviceApp = $('serviceApp');
 const documentApp = $('documentApp');
 const documentPaper = $('documentPaper');
+const officeApp = $('officeApp');
+let officeState = null;
+let selectedPlate = null;
 
 function post(name, data = {}) {
     fetch(`https://${GetParentResourceName()}/${name}`, {
@@ -22,6 +25,7 @@ function fmtMoney(value, currency) {
 function closeAll() {
     serviceApp.classList.add('hidden');
     documentApp.classList.add('hidden');
+    officeApp.classList.add('hidden');
     post('close');
 }
 
@@ -151,9 +155,11 @@ window.addEventListener('message', (event) => {
     const data = event.data || {};
     if (data.action === 'openService') openService(data.payload || {});
     if (data.action === 'openDocument') openDocument(data.payload || {});
+    if (data.action === 'openOffice') openOffice(data.payload || {});
     if (data.action === 'forceClose') {
         serviceApp.classList.add('hidden');
         documentApp.classList.add('hidden');
+        officeApp.classList.add('hidden');
     }
 });
 
@@ -185,4 +191,64 @@ $('serviceSubmit').addEventListener('click', () => {
 
     serviceApp.classList.add('hidden');
     post('serviceSubmit', payload);
+});
+
+
+
+function openOffice(payload) {
+    officeState = payload;
+    selectedPlate = null;
+    const list = $('officeVehicleList');
+    const vehicles = payload.vehicles || [];
+
+    if (vehicles.length === 0) {
+        list.innerHTML = '<div style="color:rgba(255,255,255,.5);text-align:center;padding:20px;font-size:13px;">Nincs elérhető jármű.</div>';
+    } else {
+        list.innerHTML = vehicles.map(v => `
+            <div class="office-vehicle-item" data-plate="${v.plate}">
+                <div>
+                    <div class="plate">${v.plate}</div>
+                    <div class="model">${v.model_label || 'Ismeretlen'}</div>
+                </div>
+                <span class="status ${v.status}">${v.status === 'valid' ? 'Forgalmi OK' : 'Vizsgázott'}</span>
+            </div>
+        `).join('');
+    }
+
+    $('officeActions').classList.add('hidden');
+    $('officeSelected').textContent = '-';
+
+    serviceApp.classList.add('hidden');
+    documentApp.classList.add('hidden');
+    officeApp.classList.remove('hidden');
+
+    // Bind vehicle clicks
+    list.querySelectorAll('.office-vehicle-item').forEach(el => {
+        el.addEventListener('click', () => {
+            list.querySelectorAll('.office-vehicle-item').forEach(e => e.classList.remove('active'));
+            el.classList.add('active');
+            selectedPlate = el.dataset.plate;
+            $('officeSelected').textContent = 'Kiválasztva: ' + selectedPlate;
+            $('officeActions').classList.remove('hidden');
+        });
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'btnIssueDoc' && selectedPlate) {
+        officeApp.classList.add('hidden');
+        post('officeAction', { action: 'issueDocument', plate: selectedPlate });
+    }
+    if (e.target.id === 'btnInsurance' && selectedPlate) {
+        officeApp.classList.add('hidden');
+        post('officeAction', { action: 'buyInsurance', plate: selectedPlate });
+    }
+    if (e.target.id === 'btnTax' && selectedPlate) {
+        officeApp.classList.add('hidden');
+        post('officeAction', { action: 'payTax', plate: selectedPlate });
+    }
+    if (e.target.id === 'btnReplace' && selectedPlate) {
+        officeApp.classList.add('hidden');
+        post('officeAction', { action: 'replaceDocument', plate: selectedPlate });
+    }
 });
