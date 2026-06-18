@@ -518,6 +518,63 @@ RegisterNetEvent('realrpg_forgalmi:client:openInsurance', function(payload)
     SendNUIMessage({ action = 'openInsurance', payload = payload })
 end)
 
+RegisterNetEvent('realrpg_forgalmi:client:openContract', function(payload)
+    nuiOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({ action = 'openContract', payload = payload })
+end)
+
+RegisterNUICallback('contractSign', function(payload, cb)
+    nuiOpen = false
+    SetNuiFocus(false, false)
+    if not payload or not payload.plate then cb(false) return end
+    TriggerServerEvent('realrpg_forgalmi:server:contractSign', payload.plate, payload.role)
+    cb(true)
+end)
+
+RegisterNetEvent('realrpg_forgalmi:client:startSale', function()
+    local vehicle = getTargetVehicle()
+    if vehicle == 0 then
+        notify('Állj a jármű mellé, amit el szeretnél adni.', 'error')
+        return
+    end
+    local plate = trimPlate(GetVehicleNumberPlateText(vehicle))
+    if not plate then
+        notify('Nem sikerült beolvasni a rendszámot.', 'error')
+        return
+    end
+
+    local myPed = PlayerPedId()
+    local myCoords = GetEntityCoords(myPed)
+    local closestPlayer = nil
+    local closestDist = 999.0
+
+    for _, playerId in ipairs(GetActivePlayers()) do
+        if playerId ~= PlayerId() then
+            local otherPed = GetPlayerPed(playerId)
+            if DoesEntityExist(otherPed) then
+                local otherCoords = GetEntityCoords(otherPed)
+                local dist = #(myCoords - otherCoords)
+                if dist < closestDist and dist < 5.0 then
+                    closestDist = dist
+                    closestPlayer = GetPlayerServerId(playerId)
+                end
+            end
+        end
+    end
+
+    if not closestPlayer then
+        notify('Nincs játékos a közeledben (5m). A vevőnek melletted kell állnia.', 'error')
+        return
+    end
+
+    local priceStr = keyboardInput('Eladási ár', '0', 10)
+    if not priceStr or priceStr == '' then return end
+    local price = tonumber(priceStr) or 0
+
+    TriggerServerEvent('realrpg_forgalmi:server:startSaleContract', plate, closestPlayer, price)
+end)
+
 RegisterCommand('forgalmi_jarmu', function()
     local vehicle = getTargetVehicle()
     if vehicle == 0 then

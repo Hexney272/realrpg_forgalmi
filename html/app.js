@@ -7,6 +7,7 @@ const documentApp = $('documentApp');
 const documentPaper = $('documentPaper');
 const officeApp = $('officeApp');
 const insuranceApp = $('insuranceApp');
+const contractApp = $('contractApp');
 let officeState = null;
 let selectedPlate = null;
 
@@ -28,6 +29,7 @@ function closeAll() {
     documentApp.classList.add('hidden');
     officeApp.classList.add('hidden');
     insuranceApp.classList.add('hidden');
+    contractApp.classList.add('hidden');
     post('close');
 }
 
@@ -168,17 +170,55 @@ function openInsurance(payload) {
     insuranceApp.classList.remove('hidden');
 }
 
+let contractState = null;
+
+function openContract(payload) {
+    contractState = payload;
+    setText('ct_seller', payload.sellerName || '-');
+    setText('ct_buyer', payload.buyerName || '-');
+    setText('ct_model', payload.modelLabel || '-');
+    setText('ct_plate', payload.plate || '-');
+    setText('ct_price', fmtMoney(payload.price, payload.currency));
+    setText('ct_date', payload.date || '-');
+
+    const sigSeller = $('ct_sig_seller');
+    const sigBuyer = $('ct_sig_buyer');
+    sigSeller.textContent = payload.sellerSigned ? payload.sellerName : '';
+    sigBuyer.textContent = payload.buyerSigned ? payload.buyerName : '';
+
+    const signBtn = $('btnSign');
+    if (payload.role === 'seller' && !payload.sellerSigned) {
+        signBtn.textContent = 'Aláírás (Eladó)';
+        signBtn.classList.remove('signed');
+        signBtn.style.display = '';
+    } else if (payload.role === 'buyer' && !payload.buyerSigned) {
+        signBtn.textContent = 'Aláírás (Vevő)';
+        signBtn.classList.remove('signed');
+        signBtn.style.display = '';
+    } else {
+        signBtn.style.display = 'none';
+    }
+
+    serviceApp.classList.add('hidden');
+    documentApp.classList.add('hidden');
+    officeApp.classList.add('hidden');
+    insuranceApp.classList.add('hidden');
+    contractApp.classList.remove('hidden');
+}
+
 window.addEventListener('message', (event) => {
     const data = event.data || {};
     if (data.action === 'openService') openService(data.payload || {});
     if (data.action === 'openDocument') openDocument(data.payload || {});
     if (data.action === 'openOffice') openOffice(data.payload || {});
     if (data.action === 'openInsurance') openInsurance(data.payload || {});
+    if (data.action === 'openContract') openContract(data.payload || {});
     if (data.action === 'forceClose') {
         serviceApp.classList.add('hidden');
         documentApp.classList.add('hidden');
         officeApp.classList.add('hidden');
         insuranceApp.classList.add('hidden');
+        contractApp.classList.add('hidden');
     }
 });
 
@@ -269,5 +309,15 @@ document.addEventListener('click', (e) => {
     if (e.target.id === 'btnReplace' && selectedPlate) {
         officeApp.classList.add('hidden');
         post('officeAction', { action: 'replaceDocument', plate: selectedPlate });
+    }
+});
+
+
+document.addEventListener('click', function(e) {
+    if (e.target.id === 'btnSign' && contractState) {
+        e.target.classList.add('signed');
+        e.target.textContent = 'Aláírva';
+        contractApp.classList.add('hidden');
+        post('contractSign', { plate: contractState.plate, role: contractState.role });
     }
 });

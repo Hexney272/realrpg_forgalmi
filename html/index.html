@@ -190,6 +190,52 @@
         </div>
     </div>
 
+    <div id="contractApp" class="screen hidden">
+        <div class="contract-paper">
+            <div class="contract-header">
+                <h2>GÉPJÁRMŰ ADÁSVÉTELI SZERZŐDÉS</h2>
+                <p class="contract-subtitle">Real City | RealRPG</p>
+            </div>
+            <div class="contract-body">
+                <div class="contract-section">
+                    <h3>1. Eladó adatai</h3>
+                    <div class="contract-field"><span>Név:</span><b id="ct_seller">-</b></div>
+                </div>
+                <div class="contract-section">
+                    <h3>2. Vevő adatai</h3>
+                    <div class="contract-field"><span>Név:</span><b id="ct_buyer">-</b></div>
+                </div>
+                <div class="contract-section">
+                    <h3>3. Jármű adatai</h3>
+                    <div class="contract-field"><span>Típus:</span><b id="ct_model">-</b></div>
+                    <div class="contract-field"><span>Rendszám:</span><b id="ct_plate">-</b></div>
+                </div>
+                <div class="contract-section">
+                    <h3>4. Vételár</h3>
+                    <div class="contract-field"><span>Összeg:</span><b id="ct_price">-</b></div>
+                </div>
+                <div class="contract-section">
+                    <p class="contract-legal">Alulírott felek kijelentik, hogy a fenti gépjármű adásvétele közös megegyezéssel történik. Az eladó szavatolja, hogy a jármű per- és tehermentes, harmadik személynek nincs rajta fennálló joga.</p>
+                </div>
+                <div class="contract-signatures">
+                    <div class="sig-box">
+                        <div class="sig-label">Eladó aláírása</div>
+                        <div class="sig-line" id="ct_sig_seller"></div>
+                    </div>
+                    <div class="sig-box">
+                        <div class="sig-label">Vevő aláírása</div>
+                        <div class="sig-line" id="ct_sig_buyer"></div>
+                    </div>
+                </div>
+                <div class="contract-date">Kelt: <span id="ct_date">-</span></div>
+            </div>
+            <div class="contract-actions">
+                <button id="btnSign" class="contract-sign-btn">Aláírás</button>
+                <button class="contract-close-btn" data-close="true">Bezárás</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

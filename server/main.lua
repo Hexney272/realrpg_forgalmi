@@ -696,6 +696,13 @@ CreateThread(function()
         end)
     end
 
+    -- Adásvételi szerződés item használat
+    if ESX.RegisterUsableItem and Config.Extras and Config.Extras.SaleContract and Config.Extras.SaleContract.ItemName then
+        ESX.RegisterUsableItem(Config.Extras.SaleContract.ItemName, function(source)
+            TriggerClientEvent('realrpg_forgalmi:client:startSale', source)
+        end)
+    end
+
     print('^2[realrpg_forgalmi]^7 elindult. Item: ' .. Config.ItemName)
 end)
 
@@ -940,6 +947,143 @@ RegisterNetEvent('realrpg_forgalmi:server:changePlate', function(vehicleData, ne
     webhookLog('Rendszámcsere', { ["Játékos"] = xPlayer.identifier, ["Régi"] = data.plate, ["Új"] = newPlate, ["Ár"] = fmtMoney(price) })
     TriggerClientEvent('realrpg_forgalmi:client:setVehiclePlate', src, data.plate, newPlate)
     notify(src, 'Rendszámcsere sikeres. Az új rendszám: ' .. newPlate .. '. Új forgalmi szükséges.', 'success')
+end)
+
+-- Adásvételi szerződés NUI rendszer
+local activeContracts = {}
+
+RegisterNetEvent('realrpg_forgalmi:server:startSaleContract', function(plate, buyerId, price)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate then return end
+    local buyerSrc = tonumber(buyerId)
+    price = tonumber(price) or 0
+
+    local xSeller = ESX.GetPlayerFromId(src)
+    local xBuyer = ESX.GetPlayerFromId(buyerSrc)
+    if not xSeller or not xBuyer then
+        notify(src, 'A vevő nincs a közeledben vagy nem elérhető.', 'error')
+        return
+    end
+
+    local owned, _, ownerErr = validateOwner(src, plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+
+    local doc = getDocumentByPlate(plate)
+    local modelLabel = (doc and doc.model_label) or 'Ismeretlen'
+    local sellerName = getOwnerName(xSeller.identifier)
+    local buyerName = getOwnerName(xBuyer.identifier)
+    local key = normalizePlateForSql(plate)
+
+    activeContracts[key] = {
+        plate = plate,
+        seller = src,
+        buyer = buyerSrc,
+        sellerIdentifier = xSeller.identifier,
+        buyerIdentifier = xBuyer.identifier,
+        sellerName = sellerName,
+        buyerName = buyerName,
+        modelLabel = modelLabel,
+        price = price,
+        sellerSigned = false,
+        buyerSigned = false,
+        expires = os.time() + 300
+    }
+
+    local basePayload = {
+        plate = plate,
+        sellerName = sellerName,
+        buyerName = buyerName,
+        modelLabel = modelLabel,
+        price = price,
+        currency = Config.Currency,
+        date = humanDate(sqlNow()),
+        sellerSigned = false,
+        buyerSigned = false
+    }
+
+    local sellerPayload = {}
+    for k, v in pairs(basePayload) do sellerPayload[k] = v end
+    sellerPayload.role = 'seller'
+
+    TriggerClientEvent('realrpg_forgalmi:client:openContract', src, sellerPayload)
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:contractSign', function(plate, role)
+    local src = source
+    plate = trimPlate(plate)
+    if not plate then return end
+    local key = normalizePlateForSql(plate)
+    local contract = activeContracts[key]
+    if not contract or contract.expires < os.time() then
+        notify(src, 'A szerződés lejárt vagy nem létezik.', 'error')
+        return
+    end
+
+    if role == 'seller' and src == contract.seller then
+        contract.sellerSigned = true
+        notify(src, 'Aláírtad a szerződést. Várakozás a vevő aláírására...', 'success')
+
+        local buyerPayload = {
+            plate = contract.plate,
+            sellerName = contract.sellerName,
+            buyerName = contract.buyerName,
+            modelLabel = contract.modelLabel,
+            price = contract.price,
+            currency = Config.Currency,
+            date = humanDate(sqlNow()),
+            sellerSigned = true,
+            buyerSigned = false,
+            role = 'buyer'
+        }
+        TriggerClientEvent('realrpg_forgalmi:client:openContract', contract.buyer, buyerPayload)
+
+    elseif role == 'buyer' and src == contract.buyer then
+        contract.buyerSigned = true
+
+        if contract.sellerSigned and contract.buyerSigned then
+            local xBuyer = ESX.GetPlayerFromId(contract.buyer)
+            local xSeller = ESX.GetPlayerFromId(contract.seller)
+            if not xBuyer then
+                notify(src, 'Hiba a vásárlás során.', 'error')
+                activeContracts[key] = nil
+                return
+            end
+
+            if contract.price > 0 then
+                if not removePlayerMoney(xBuyer, contract.price) then
+                    notify(contract.buyer, 'Nincs elég pénzed a vásárláshoz.', 'error')
+                    activeContracts[key] = nil
+                    return
+                end
+                if xSeller then xSeller.addMoney(contract.price) end
+            end
+
+            MySQL.update.await(([[UPDATE `%s` SET `%s` = ? WHERE REPLACE(UPPER(`%s`), ' ', '') = ? LIMIT 1]]):format(
+                Config.VehicleTable, Config.VehicleOwnerColumn, Config.VehiclePlateColumn
+            ), { xBuyer.identifier, key })
+
+            MySQL.update.await([[
+                UPDATE `vehicle_documents` SET `owner_identifier` = ?, `owner_name` = ?, `status` = 'invalid', `invalid_reason` = 'Tulajdonosváltás - új forgalmi szükséges'
+                WHERE `plate` = ?
+            ]], { xBuyer.identifier, contract.buyerName, contract.plate })
+
+            local itemName = Config.Extras.SaleContract.ItemName or 'adasveteli_szerzodes'
+            exports.ox_inventory:AddItem(contract.buyer, itemName, 1, {
+                plate = contract.plate,
+                description = ('Rendszám: %s | Ár: %s'):format(contract.plate, fmtMoney(contract.price)),
+                label = 'Adásvételi szerződés - ' .. contract.plate
+            })
+
+            notify(contract.buyer, 'Sikeres adásvétel! A jármű a nevedre került. Okmányirodában új forgalmit kell kiállítanod.', 'success')
+            if xSeller then notify(contract.seller, 'Az adásvétel lezárult. Pénz jóváírva: ' .. fmtMoney(contract.price), 'success') end
+
+            webhookLog('Adásvétel (NUI)', { ["Rendszám"] = contract.plate, ["Eladó"] = contract.sellerIdentifier, ["Vevő"] = xBuyer.identifier, ["Ár"] = fmtMoney(contract.price) })
+            activeContracts[key] = nil
+        end
+    else
+        notify(src, 'Nincs jogosultságod aláírni.', 'error')
+    end
 end)
 
 RegisterCommand('adasvetel', function(src, args)
