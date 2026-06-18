@@ -353,6 +353,32 @@ local function collectVehicleData(vehicle)
     local snapshot = getVehicleModSnapshot(vehicle)
     local display = getVehicleDisplayData(vehicle, modelName, modelLabel)
 
+    -- vms_tuning integráció (ha elérhető)
+    if GetResourceState('vms_tuning') == 'started' then
+        local okVms, vmsData = pcall(function()
+            return exports['vms_tuning']:getVehicleUpgrades(vehicle)
+        end)
+        if okVms and type(vmsData) == 'table' then
+            -- A vms_tuning részletesebb tuning neveket ad
+            if vmsData.engine then display.engine = tostring(vmsData.engine) end
+            if vmsData.turbo then display.turbo = tostring(vmsData.turbo) end
+            if vmsData.transmission then display.transmission = tostring(vmsData.transmission) end
+            if vmsData.suspension then display.suspension = tostring(vmsData.suspension) end
+            if vmsData.brakes then display.brakes = tostring(vmsData.brakes) end
+            if vmsData.tires then display.tires = tostring(vmsData.tires) end
+            if vmsData.ecu then display.ecu = tostring(vmsData.ecu) end
+            if vmsData.weightReduction then display.weightReduction = tostring(vmsData.weightReduction) end
+            if vmsData.horn then display.uniqueSound = tostring(vmsData.horn) end
+            if vmsData.rim then display.rim = tostring(vmsData.rim) end
+            if vmsData.rimPaint then display.rimPaint = tostring(vmsData.rimPaint) end
+            if vmsData.paintJob then display.paintJob = tostring(vmsData.paintJob) end
+            if vmsData.primaryColor then display.primaryColor = tostring(vmsData.primaryColor) end
+            if vmsData.secondaryColor then display.secondaryColor = tostring(vmsData.secondaryColor) end
+            dprint('vms_tuning adatok beolvasva: ' .. plate)
+        end
+    end
+
+    -- Külső tuning export (fallback, ha a vms_tuning nem elérhető)
     if Config.ExternalTuningDataExport then
         local resource, exportName = Config.ExternalTuningDataExport:match('([^:]+):(.+)')
         if resource and exportName and exports[resource] and exports[resource][exportName] then
@@ -367,9 +393,53 @@ local function collectVehicleData(vehicle)
         end
     end
 
+    -- tuff-nitro integráció (NOS, backfire, antilag)
+    if GetResourceState('tuff-nitro') == 'started' then
+        local okTuff, tuffData = pcall(function()
+            -- A tuff-nitro statebag-eken keresztül tárolja az adatokat
+            -- Alternatíva: Entity state 'tuff_nitro' ha elérhető
+            local state = Entity(vehicle).state
+            if state and state.tuff_nitro then
+                return state.tuff_nitro
+            end
+            return nil
+        end)
+
+        if okTuff and type(tuffData) == 'table' then
+            display.nitrous = tuffData.nitrousColor and ('NOS: ' .. tostring(tuffData.nitrousColor)) or 'nincs'
+            display.backfire = tuffData.hasExhaust and ('Tuff ' .. tostring(tuffData.exhaustId or 'exhaust')) or display.backfire
+            if tuffData.antilag2step then
+                local al = tuffData.antilag2step
+                if al.enableAntiLag then
+                    display.backfire = 'Antilag aktív'
+                end
+            end
+        else
+            display.nitrous = display.nitrous or 'nincs'
+        end
+    else
+        display.nitrous = 'nincs'
+    end
+
     local props = {}
     if ESX.Game and ESX.Game.GetVehicleProperties then
         props = ESX.Game.GetVehicleProperties(vehicle) or {}
+    end
+
+    -- tuff-nitro állapot hozzáadása a hash-hez (érvénytelenítés módosításkor)
+    if GetResourceState('tuff-nitro') == 'started' then
+        local okState, tuffState = pcall(function()
+            local state = Entity(vehicle).state
+            return state and state.tuff_nitro or nil
+        end)
+        if okState and type(tuffState) == 'table' then
+            snapshot.tuffNitro = {
+                color = tuffState.nitrousColor or tuffState.color,
+                exhaust = tuffState.exhaustId,
+                hasExhaust = tuffState.hasExhaust,
+                antilag = tuffState.antilag2step and tuffState.antilag2step.enableAntiLag
+            }
+        end
     end
 
     local hash = tostring(GetHashKey(stableEncode(snapshot)))

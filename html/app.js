@@ -143,6 +143,7 @@ function openDocument(payload) {
     setText('f_lighttype', f.lightType);
     setText('f_lightcolor', f.lightColor);
     setText('f_horn', f.uniqueSound);
+    setText('f_nitrous', f.nitrous);
     setText('f_backfire', f.backfire);
     setText('f_height', f.rideHeight || 'nincs');
     setText('f_optical', f.opticalTuning);

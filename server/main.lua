@@ -192,6 +192,18 @@ local function getDocumentByPlate(plate)
     return row
 end
 
+local function getTuffNitroData(plate)
+    if not plate then return nil end
+    if GetResourceState('tuff-nitro') ~= 'started' then return nil end
+
+    local ok, data = pcall(function()
+        return exports['tuff-nitro']:GetVehicleData(plate)
+    end)
+
+    if ok and type(data) == 'table' then return data end
+    return nil
+end
+
 local function ensureVehicleData(data)
     if type(data) ~= 'table' then return nil, 'Hibás jármű adat.' end
     local plate = trimPlate(data.plate)
@@ -285,10 +297,25 @@ local function makeDisplayData(data, ownerName, vin, engineCode, validUntil, iss
     display.lightColor = display.lightColor or 'nincs'
     display.uniqueSound = display.uniqueSound or 'nincs'
     display.backfire = display.backfire or 'nincs'
+    display.nitrous = display.nitrous or 'nincs'
     display.opticalTuning = display.opticalTuning or 'nincs'
     display.neonLayout = display.neonLayout or 'nincs'
     display.neonType = display.neonType or 'nincs'
     display.neonColor = display.neonColor or 'nincs'
+
+    -- tuff-nitro adatok beépítése (szerver oldalon, a datas.json/mysql-ből)
+    local tuffData = getTuffNitroData(data.plate)
+    if tuffData then
+        if tuffData.nitrousColor then
+            display.nitrous = 'NOS ' .. tostring(tuffData.nitrousColor)
+        end
+        if tuffData.hasExhaust and tuffData.exhaustId then
+            display.backfire = 'Tuff ' .. tostring(tuffData.exhaustId):gsub('exhaust_', '')
+        end
+        if tuffData.antilag2step and tuffData.antilag2step.enableAntiLag then
+            display.backfire = (display.backfire or '') .. ' + Antilag'
+        end
+    end
 
     return display
 end
