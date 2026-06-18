@@ -50,8 +50,15 @@ local function createNpc(data)
 
     SetEntityAsMissionEntity(ped, true, true)
     SetEntityHeading(ped, c.w or 0.0)
-    SetEntityCoordsNoOffset(ped, c.x, c.y, c.z - 1.0, false, false, false)
-    PlaceEntityOnGroundProperly(ped)
+
+    -- Talajra illesztés: GetGroundZFor_3dCoord a megbízható módszer
+    local groundFound, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 2.0, false)
+    if groundFound then
+        SetEntityCoordsNoOffset(ped, c.x, c.y, groundZ, false, false, false)
+    else
+        SetEntityCoordsNoOffset(ped, c.x, c.y, c.z, false, false, false)
+    end
+
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetEntityInvincible(ped, true)
     FreezeEntityPosition(ped, true)
