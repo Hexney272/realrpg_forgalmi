@@ -50,7 +50,8 @@ Config.ServiceNpc = {
     Model = 's_m_m_autoshop_01',
     Coords = { x = -347.28, y = -133.46, z = 38.01, w = 70.0 },
     Label = 'Műszaki vizsga',
-    Icon = 'fa-solid fa-screwdriver-wrench'
+    Icon = 'fa-solid fa-screwdriver-wrench',
+    Name = 'Szabó Márk'  -- Ez jelenik meg az NPC feje felett
 }
 
 Config.OfficeNpc = {
@@ -58,7 +59,21 @@ Config.OfficeNpc = {
     Model = 'a_f_y_business_01',
     Coords = { x = -552.67, y = -192.62, z = 37.22, w = 210.0 },
     Label = 'Forgalmi engedély kiállítása',
-    Icon = 'fa-solid fa-id-card'
+    Icon = 'fa-solid fa-id-card',
+    Name = 'Kovács Anna'  -- Ez jelenik meg az NPC feje felett
+}
+
+-- Okmányiroda marker (real_markers): az NPC előtt, szöveg/badge nélkül.
+Config.OfficeMarker = {
+    Enabled = true,
+    Resource = 'real_markers',
+    Id = 'realrpg_office',
+    Style = 'document',
+    Coords = vec3(-552.67, -192.62, 37.22),
+    DrawDistance = 25.0,
+    InteractDistance = 2.5,
+    HelpText = '~INPUT_CONTEXT~ Forgalmi engedély kiállítása',
+    ShowBadge = false    -- NEM jelenik meg NUI badge/szöveg, csak a marker
 }
 
 

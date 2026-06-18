@@ -497,6 +497,40 @@ local function buildDocumentPayload(doc)
     }
 end
 
+RegisterNetEvent('realrpg_forgalmi:server:issueDocumentWalk', function()
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return notify(src, 'Nem található játékos.', 'error') end
+
+    -- Megkeressük a játékos legutolsó érvényes vizsgával rendelkező járművét
+    local row = MySQL.single.await([[
+        SELECT `plate`, `model_name`, `model_label`, `display_data`, `properties`, `mod_hash`
+        FROM `vehicle_documents`
+        WHERE `owner_identifier` = ? AND `status` = 'inspected'
+          AND `inspection_valid_until` IS NOT NULL AND `inspection_valid_until` >= NOW()
+        ORDER BY `inspection_done_at` DESC
+        LIMIT 1
+    ]], { xPlayer.identifier })
+
+    if not row then
+        notify(src, 'Nincs érvényes műszaki vizsgával rendelkező járműved. Először vizsgáztasd le a szervizben.', 'error')
+        return
+    end
+
+    -- Összerakjuk a data objektumot a meglévő issueDocument függvényhez
+    local data = {
+        plate = row.plate,
+        modelName = row.model_name or 'unknown',
+        modelLabel = row.model_label or 'Ismeretlen',
+        makeName = '',
+        modHash = row.mod_hash or '',
+        display = safeDecode(row.display_data),
+        properties = safeDecode(row.properties)
+    }
+
+    issueDocument(src, data)
+end)
+
 RegisterNetEvent('realrpg_forgalmi:server:runInspection', function(vehicleData, selections)
     local src = source
     local data, err = ensureVehicleData(vehicleData)
