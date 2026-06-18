@@ -1,7 +1,7 @@
 Config = {}
 
 -- ALAP BEÁLLÍTÁSOK
-Config.Debug = false
+Config.Debug = true
 Config.ItemName = 'forgalmi_engedely'
 Config.MoneyAccount = 'money' -- money = készpénz, bank = bankszámla
 Config.Currency = 'Ft'
@@ -25,7 +25,7 @@ Config.OnlyOwnerCanUse = true
 Config.Inspection = {
     Price = 150000,
     ValidityDays = 365,
-    CompanyName = 'VAPID OF LOS SANTOS',
+    CompanyName = 'REAL OF LOS SANTOS',
     RepairDurationMinutes = 0,
     ClubSpeedupMinutes = 0,
     ExpectedDurationMinutes = 0
@@ -44,29 +44,9 @@ Config.InvalidateOnModification = true
 Config.ModificationCheckIntervalMs = 12000
 Config.VehicleSearchRadius = 8.0
 
--- MŰSZAKI VIZSGA HELYSZÍN: real_markers marker (a szerviz NPC helyett).
--- A marker felett ÁLLVA, a SAJÁT járművedben (vezetőülésben) ülve nyílik meg a NUI.
-Config.ServiceMarker = {
-    Enabled = true,                 -- true: a real_markers markert használja az NPC helyett
-    Resource = 'real_markers',      -- a marker resource neve
-    Id = 'realrpg_inspection',      -- egyedi marker azonosító
-    Style = 'real_inspection',      -- real_markers style (MŰSZAKI VIZSGA)
-    Coords = vec3(-347.28, -133.46, 38.01),
-    Title = 'MŰSZAKI VIZSGA',
-    Subtitle = 'Ülj a járművedbe és nyomd meg az E-t',
-    HelpText = '~INPUT_CONTEXT~ Műszaki vizsga (ülj a saját járművedben)',
-    DrawDistance = 30.0,
-    InteractDistance = 3.5,
-    RequireOwnVehicle = true,       -- csak a saját (owned_vehicles) járművedre nyíljon meg
-    RequireDriverSeat = true        -- a vezetőülésben kell ülnöd
-}
-
 -- NPC-k / helyszínek. Írd át a saját pályádhoz.
--- A szerviz (műszaki) NPC alapból KI van kapcsolva, mert a Config.ServiceMarker
--- markert használjuk helyette. Ha mégis NPC-t szeretnél, állítsd ServiceMarker.Enabled = false-ra
--- és ServiceNpc.Enabled = true-ra.
 Config.ServiceNpc = {
-    Enabled = false,
+    Enabled = true,
     Model = 's_m_m_autoshop_01',
     Coords = { x = -347.28, y = -133.46, z = 38.01, w = 70.0 },
     Label = 'Műszaki vizsga',
@@ -79,6 +59,28 @@ Config.OfficeNpc = {
     Coords = { x = -552.67, y = -192.62, z = 37.22, w = 210.0 },
     Label = 'Forgalmi engedély kiállítása',
     Icon = 'fa-solid fa-id-card'
+}
+
+
+
+-- LÁTHATÓ NPC / MARKER BEÁLLÍTÁSOK
+-- Ha nem használod az ox_targetet vagy bármiért nem indulna el, a marker akkor is működik.
+Config.Interaction = {
+    UseOxTarget = true,
+    DrawMarkers = true,
+    MarkerDistance = 25.0,
+    InteractDistance = 2.2,
+    Key = 38, -- E
+    MarkerType = 1,
+    MarkerSize = { x = 1.1, y = 1.1, z = 0.25 },
+    MarkerColor = { r = 255, g = 204, b = 45, a = 170 },
+    HelpTextService = '~INPUT_CONTEXT~ Műszaki vizsga megnyitása',
+    HelpTextOffice = '~INPUT_CONTEXT~ Forgalmi engedély kiállítása'
+}
+
+Config.Blips = {
+    Service = { enabled = true, sprite = 446, color = 5, scale = 0.75, label = 'RealRPG Műszaki vizsga' },
+    Office = { enabled = true, sprite = 498, color = 5, scale = 0.75, label = 'RealRPG Okmányiroda' }
 }
 
 -- FORGALMI ENGEDÉLY KINÉZET
@@ -135,4 +137,91 @@ Config.XenonColorNames = {
     [-1] = 'gyári', [0] = 'Fehér', [1] = 'Kék', [2] = 'Elektromos kék', [3] = 'Mentazöld', [4] = 'Lime',
     [5] = 'Sárga', [6] = 'Arany', [7] = 'Narancs', [8] = 'Piros', [9] = 'Pony pink', [10] = 'Hot pink',
     [11] = 'Lila', [12] = 'Blacklight'
+}
+
+-- EXTRA RP RENDSZEREK
+Config.Extras = {
+    Insurance = {
+        Enabled = true,
+        Price = 75000,
+        ValidityDays = 30,
+        Label = 'Kötelező biztosítás'
+    },
+    Tax = {
+        Enabled = true,
+        BasePrice = 25000,
+        ValidityDays = 30,
+        PricesByClass = {
+            [0] = 25000, [1] = 25000, [2] = 35000, [3] = 35000, [4] = 45000,
+            [5] = 60000, [6] = 75000, [7] = 120000, [8] = 20000, [9] = 50000,
+            [10] = 90000, [11] = 80000, [12] = 65000, [13] = 10000, [14] = 70000,
+            [15] = 150000, [16] = 150000, [17] = 80000, [18] = 100000, [19] = 100000,
+            [20] = 150000, [21] = 150000, [22] = 250000
+        },
+        Label = 'Járműadó'
+    },
+    Replacement = {
+        Enabled = true,
+        Price = 50000,
+        Label = 'Forgalmi pótlása'
+    },
+    PlateChange = {
+        Enabled = true,
+        NormalPrice = 100000,
+        CustomPrice = 500000,
+        MinLength = 2,
+        MaxLength = 8,
+        AllowCustom = true
+    },
+    OfficeQueue = {
+        Enabled = true,
+        DurationMs = 15000,
+        Prefix = 'A'
+    },
+    WorkOrder = {
+        Enabled = true,
+        ItemName = 'szerviz_munkalap'
+    },
+    SaleContract = {
+        Enabled = true,
+        ItemName = 'adasveteli_szerzodes',
+        TransferFee = 50000,
+        PendingMinutes = 10
+    },
+    FakeDocument = {
+        Enabled = true,
+        ItemName = 'hamis_forgalmi',
+        Prices = { weak = 250000, medium = 500000, professional = 1000000 },
+        DetectionChance = { weak = 65, medium = 30, professional = 10 }
+    },
+    Wanted = {
+        Enabled = true,
+        AdminGroups = { admin = true, superadmin = true, owner = true }
+    },
+    InspectionHealth = {
+        Enabled = true,
+        MinEngine = 850.0,
+        MinBody = 850.0,
+        MinTank = 900.0
+    },
+    Garage = {
+        BlockIfInspectionInvalid = false,
+        BlockIfInsuranceExpired = false,
+        BlockIfTaxExpired = false
+    }
+}
+
+Config.IllegalNpc = {
+    Enabled = false,
+    Model = 'g_m_y_mexgoon_02',
+    Coords = { x = 707.42, y = -966.83, z = 30.41, w = 180.0 },
+    Label = 'Hamis forgalmi készítése',
+    Icon = 'fa-solid fa-mask'
+}
+
+Config.Discord = {
+    Enabled = false,
+    Webhook = '',
+    Name = 'RealRPG Forgalmi Log',
+    Color = 16762624
 }

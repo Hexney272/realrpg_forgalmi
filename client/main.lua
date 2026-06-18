@@ -25,6 +25,7 @@ end
 
 local function createNpc(data)
     if not data or not data.Enabled then return nil end
+
     local model = requestModel(data.Model)
     if not HasModelLoaded(model) then
         print('[realrpg_forgalmi] NPC model nem tölthető be: ' .. tostring(data.Model))
@@ -32,13 +33,73 @@ local function createNpc(data)
     end
 
     local c = data.Coords
-    local ped = CreatePed(4, model, c.x, c.y, c.z, c.w or 0.0, false, true)
+
+    -- Fontos: sok mapon a megadott Z koordináta padlószint vagy túl magas/alacsony.
+    -- Ezért először a közelbe spawnoljuk, betöltjük a collisiont, majd földre illesztjük.
+    RequestCollisionAtCoord(c.x, c.y, c.z)
+    local timeout = GetGameTimer() + 5000
+    while not HasCollisionLoadedAroundEntity(PlayerPedId()) and GetGameTimer() < timeout do
+        Wait(25)
+    end
+
+    local ped = CreatePed(4, model, c.x, c.y, c.z - 1.0, c.w or 0.0, false, true)
+    if not DoesEntityExist(ped) then
+        print('[realrpg_forgalmi] NPC létrehozás sikertelen: ' .. tostring(data.Model))
+        return nil
+    end
+
     SetEntityAsMissionEntity(ped, true, true)
+    SetEntityHeading(ped, c.w or 0.0)
+    SetEntityCoordsNoOffset(ped, c.x, c.y, c.z - 1.0, false, false, false)
+    PlaceEntityOnGroundProperly(ped)
     SetBlockingOfNonTemporaryEvents(ped, true)
     SetEntityInvincible(ped, true)
     FreezeEntityPosition(ped, true)
     SetPedCanRagdoll(ped, false)
+    SetModelAsNoLongerNeeded(model)
+
+    if Config.Debug then
+        print(('[realrpg_forgalmi] NPC spawnolva: %s %.2f %.2f %.2f'):format(tostring(data.Model), c.x, c.y, c.z))
+    end
+
     return ped
+end
+
+local function createBlip(coords, data)
+    if not data or not data.enabled then return end
+    local blip = AddBlipForCoord(coords.x, coords.y, coords.z)
+    SetBlipSprite(blip, data.sprite or 1)
+    SetBlipColour(blip, data.color or 0)
+    SetBlipScale(blip, data.scale or 0.75)
+    SetBlipAsShortRange(blip, true)
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentString(data.label or 'RealRPG')
+    EndTextCommandSetBlipName(blip)
+end
+
+local function drawLocationMarker(coords)
+    local m = Config.Interaction or {}
+    local size = m.MarkerSize or { x = 1.1, y = 1.1, z = 0.25 }
+    local color = m.MarkerColor or { r = 255, g = 204, b = 45, a = 170 }
+    DrawMarker(
+        m.MarkerType or 1,
+        coords.x, coords.y, coords.z - 1.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        size.x or 1.1, size.y or 1.1, size.z or 0.25,
+        color.r or 255, color.g or 204, color.b or 45, color.a or 170,
+        false, true, 2, false, nil, nil, false
+    )
+end
+
+local function showHelpText(text)
+    BeginTextCommandDisplayHelp('STRING')
+    AddTextComponentSubstringPlayerName(text)
+    EndTextCommandDisplayHelp(0, false, true, -1)
+end
+
+local function oxTargetStarted()
+    return GetResourceState('ox_target') == 'started'
 end
 
 local function getLabelFromDisplay(display)
@@ -312,6 +373,12 @@ local function collectVehicleData(vehicle)
         modelName = modelName,
         modelLabel = modelLabel,
         makeName = makeName,
+        vehicleClass = GetVehicleClass(vehicle),
+        health = {
+            engine = GetVehicleEngineHealth(vehicle),
+            body = GetVehicleBodyHealth(vehicle),
+            tank = GetVehiclePetrolTankHealth(vehicle)
+        },
         display = display,
         properties = props,
         modHash = hash
@@ -330,47 +397,8 @@ local function getTargetVehicle()
     return 0
 end
 
-local pendingService = nil
-
-local function buildServicePayload(data)
-    return {
-        company = Config.Inspection.CompanyName,
-        plate = data.plate,
-        vehicleName = data.modelLabel,
-        currency = Config.Currency,
-        inspection = {
-            label = 'Műszaki vizsga',
-            price = Config.Inspection.Price,
-            time = '00:15'
-        },
-        fuel = {
-            enabled = Config.Fuel.Enabled,
-            label = Config.Fuel.Label,
-            price = Config.Fuel.Price,
-            time = '00:05'
-        },
-        duration = {
-            repair = Config.Inspection.RepairDurationMinutes,
-            club = Config.Inspection.ClubSpeedupMinutes,
-            expected = Config.Inspection.ExpectedDurationMinutes
-        },
-        vehicleData = data
-    }
-end
-
-local function openServiceNui(data)
-    if not data then return end
-    nuiOpen = true
-    SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openService',
-        payload = buildServicePayload(data)
-    })
-end
-
--- Beolvassa a jármű adatait, és (ha kell) szerver oldali tulajdonos-ellenőrzést kér,
--- mielőtt megnyitná a NUI-t. Így csak a saját járműre nyílik meg.
-local function requestService(vehicle)
+local function openServiceMenu()
+    local vehicle = getTargetVehicle()
     if vehicle == 0 then
         notify('Nincs jármű a közeledben.', 'error')
         return
@@ -382,49 +410,35 @@ local function requestService(vehicle)
         return
     end
 
-    if Config.ServiceMarker and Config.ServiceMarker.RequireOwnVehicle then
-        pendingService = data
-        TriggerServerEvent('realrpg_forgalmi:server:requestService', data.plate)
-    else
-        openServiceNui(data)
-    end
+    nuiOpen = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        action = 'openService',
+        payload = {
+            company = Config.Inspection.CompanyName,
+            plate = data.plate,
+            vehicleName = data.modelLabel,
+            currency = Config.Currency,
+            inspection = {
+                label = 'Műszaki vizsga',
+                price = Config.Inspection.Price,
+                time = '00:15'
+            },
+            fuel = {
+                enabled = Config.Fuel.Enabled,
+                label = Config.Fuel.Label,
+                price = Config.Fuel.Price,
+                time = '00:05'
+            },
+            duration = {
+                repair = Config.Inspection.RepairDurationMinutes,
+                club = Config.Inspection.ClubSpeedupMinutes,
+                expected = Config.Inspection.ExpectedDurationMinutes
+            },
+            vehicleData = data
+        }
+    })
 end
-
--- NPC útvonal (ha valaki visszakapcsolja a ServiceNpc-t): a legközelebbi / beülős jármű.
-local function openServiceMenu()
-    requestService(getTargetVehicle())
-end
-
--- A real_markers marker interakciója ide fut be (E gomb a markeren).
-RegisterNetEvent('realrpg_forgalmi:client:serviceMarker', function()
-    if nuiOpen then return end
-
-    local sm = Config.ServiceMarker or {}
-    local ped = PlayerPedId()
-    local vehicle = GetVehiclePedIsIn(ped, false)
-
-    if vehicle == 0 then
-        notify('Ülj be a járművedbe, amellyel a műszaki vizsgát szeretnéd elvégeztetni.', 'error')
-        return
-    end
-
-    if sm.RequireDriverSeat and GetPedInVehicleSeat(vehicle, -1) ~= ped then
-        notify('A vezetőülésben kell ülnöd a járműben a műszaki vizsgához.', 'error')
-        return
-    end
-
-    requestService(vehicle)
-end)
-
--- A szerver jóváhagyta (a jármű a sajátod) -> megnyitjuk a NUI-t.
-RegisterNetEvent('realrpg_forgalmi:client:serviceApproved', function(plate)
-    plate = trimPlate(plate)
-    if pendingService and trimPlate(pendingService.plate) == plate then
-        local data = pendingService
-        pendingService = nil
-        openServiceNui(data)
-    end
-end)
 
 local function issueDocumentAtOffice()
     local vehicle = getTargetVehicle()
@@ -439,6 +453,11 @@ local function issueDocumentAtOffice()
         return
     end
 
+    if Config.Extras and Config.Extras.OfficeQueue and Config.Extras.OfficeQueue.Enabled then
+        local num = math.random(1, 999)
+        notify(('Sorszám: %s-%03d | Ügyintézés folyamatban...'):format(Config.Extras.OfficeQueue.Prefix or 'A', num), 'info')
+        Wait(Config.Extras.OfficeQueue.DurationMs or 15000)
+    end
     TriggerServerEvent('realrpg_forgalmi:server:issueDocument', data)
 end
 
@@ -488,16 +507,29 @@ RegisterCommand('forgalmi_jarmu', function()
 end, false)
 
 CreateThread(function()
+    Wait(1000)
+
     servicePed = createNpc(Config.ServiceNpc)
     officePed = createNpc(Config.OfficeNpc)
 
-    if servicePed and exports.ox_target then
+    if Config.Blips then
+        if Config.ServiceNpc and Config.ServiceNpc.Coords then
+            createBlip(Config.ServiceNpc.Coords, Config.Blips.Service)
+        end
+        if Config.OfficeNpc and Config.OfficeNpc.Coords then
+            createBlip(Config.OfficeNpc.Coords, Config.Blips.Office)
+        end
+    end
+
+    local useTarget = Config.Interaction and Config.Interaction.UseOxTarget and oxTargetStarted()
+
+    if useTarget and servicePed then
         exports.ox_target:addLocalEntity(servicePed, {
             {
                 name = 'realrpg_forgalmi_service',
                 label = Config.ServiceNpc.Label,
                 icon = Config.ServiceNpc.Icon,
-                distance = 2.0,
+                distance = Config.Interaction.InteractDistance or 2.2,
                 onSelect = function()
                     openServiceMenu()
                 end
@@ -505,91 +537,70 @@ CreateThread(function()
         })
     end
 
-    if officePed and exports.ox_target then
+    if useTarget and officePed then
         exports.ox_target:addLocalEntity(officePed, {
             {
                 name = 'realrpg_forgalmi_office',
                 label = Config.OfficeNpc.Label,
                 icon = Config.OfficeNpc.Icon,
-                distance = 2.0,
+                distance = Config.Interaction.InteractDistance or 2.2,
                 onSelect = function()
                     issueDocumentAtOffice()
                 end
             }
         })
     end
-end)
 
--- A real_markers markerének regisztrálása (a szerviz NPC helyett).
-local function registerServiceMarker()
-    local sm = Config.ServiceMarker
-    if not (sm and sm.Enabled) then return false end
-
-    local res = sm.Resource or 'real_markers'
-    if GetResourceState(res) ~= 'started' then return false end
-
-    local ok, err = pcall(function()
-        exports[res]:RegisterImageMarker(sm.Id or 'realrpg_inspection', {
-            style = sm.Style or 'real_inspection',
-            coords = sm.Coords,
-            title = sm.Title,
-            subtitle = sm.Subtitle,
-            drawDistance = sm.DrawDistance or 30.0,
-            interactDistance = sm.InteractDistance or 3.0,
-            helpText = sm.HelpText or '~INPUT_CONTEXT~ Műszaki vizsga',
-            event = 'realrpg_forgalmi:client:serviceMarker',
-            serverEvent = false
-        })
-    end)
-
-    if ok then
-        print(('^2[realrpg_forgalmi]^7 Műszaki marker regisztrálva (id=%s) a(z) %s resource-ba: %s'):format(sm.Id or 'realrpg_inspection', res, tostring(sm.Coords)))
-        return true
+    if Config.Debug then
+        print('[realrpg_forgalmi] ox_target aktív: ' .. tostring(useTarget))
     end
-
-    print('^1[realrpg_forgalmi]^7 Nem sikerült regisztrálni a műszaki markert: ' .. tostring(err))
-    return false
-end
+end)
 
 CreateThread(function()
-    local sm = Config.ServiceMarker
-    if not (sm and sm.Enabled) then return end
+    Wait(1500)
+    if not Config.Interaction or not Config.Interaction.DrawMarkers then return end
 
-    local res = sm.Resource or 'real_markers'
-    local tries = 0
-    while GetResourceState(res) ~= 'started' and tries < 100 do
-        Wait(200)
-        tries = tries + 1
+    while true do
+        local sleep = 1000
+        local ped = PlayerPedId()
+        local pcoords = GetEntityCoords(ped)
+        local markerDistance = Config.Interaction.MarkerDistance or 25.0
+        local interactDistance = Config.Interaction.InteractDistance or 2.2
+        local key = Config.Interaction.Key or 38
+
+        if Config.ServiceNpc and Config.ServiceNpc.Enabled and Config.ServiceNpc.Coords then
+            local c = Config.ServiceNpc.Coords
+            local dist = #(pcoords - vector3(c.x, c.y, c.z))
+            if dist <= markerDistance then
+                sleep = 0
+                drawLocationMarker(c)
+                if dist <= interactDistance then
+                    showHelpText(Config.Interaction.HelpTextService or '~INPUT_CONTEXT~ Műszaki vizsga')
+                    if IsControlJustReleased(0, key) then
+                        openServiceMenu()
+                    end
+                end
+            end
+        end
+
+        if Config.OfficeNpc and Config.OfficeNpc.Enabled and Config.OfficeNpc.Coords then
+            local c = Config.OfficeNpc.Coords
+            local dist = #(pcoords - vector3(c.x, c.y, c.z))
+            if dist <= markerDistance then
+                sleep = 0
+                drawLocationMarker(c)
+                if dist <= interactDistance then
+                    showHelpText(Config.Interaction.HelpTextOffice or '~INPUT_CONTEXT~ Forgalmi engedély')
+                    if IsControlJustReleased(0, key) then
+                        issueDocumentAtOffice()
+                    end
+                end
+            end
+        end
+
+        Wait(sleep)
     end
-
-    if GetResourceState(res) ~= 'started' then
-        print('^3[realrpg_forgalmi]^7 A(z) ' .. res .. ' resource nem fut (20s várakozás után sem), a műszaki marker nem jött létre. Indítsd el a real_markers-t (server.cfg), vagy állítsd Config.ServiceMarker.Enabled = false-ra és Config.ServiceNpc.Enabled = true-ra.')
-        return
-    end
-
-    registerServiceMarker()
 end)
-
--- Ha a real_markers (újra)indul, regisztráljuk újra a markert, különben elveszik.
-AddEventHandler('onClientResourceStart', function(resourceName)
-    local sm = Config.ServiceMarker
-    if not (sm and sm.Enabled) then return end
-    if resourceName ~= (sm.Resource or 'real_markers') then return end
-    CreateThread(function()
-        Wait(1500) -- megvárjuk, amíg a real_markers kliens oldala feláll
-        registerServiceMarker()
-    end)
-end)
-
--- Diagnosztikai parancs: F8 konzolban kiírja az állapotot és újraregisztrál.
-RegisterCommand('forgalmi_marker_debug', function()
-    local sm = Config.ServiceMarker or {}
-    local res = sm.Resource or 'real_markers'
-    print(('^5[realrpg_forgalmi]^7 ServiceMarker.Enabled=%s | %s state=%s | Coords=%s'):format(
-        tostring(sm.Enabled), res, GetResourceState(res), tostring(sm.Coords)))
-    local done = registerServiceMarker()
-    notify(done and 'Marker újraregisztrálva. Nézd az F8 konzolt.' or ('A(z) ' .. res .. ' nem fut vagy a marker ki van kapcsolva. Lásd F8.'), done and 'success' or 'error')
-end, false)
 
 CreateThread(function()
     if not Config.InvalidateOnModification then return end
@@ -634,4 +645,168 @@ RegisterNetEvent('realrpg_forgalmi:client:useDocumentItem', function(item)
         return
     end
     TriggerServerEvent('realrpg_forgalmi:server:openByPlate', plate)
+end)
+
+-- EXTRA RP FUNKCIÓK: biztosítás, adó, pótlás, rendszámcsere, hamis forgalmi
+local illegalPed
+
+local function keyboardInput(title, defaultText, maxLength)
+    AddTextEntry('REALRPG_FORGALMI_INPUT', title or 'Adat megadása')
+    DisplayOnscreenKeyboard(1, 'REALRPG_FORGALMI_INPUT', '', defaultText or '', '', '', '', maxLength or 32)
+    while UpdateOnscreenKeyboard() == 0 do
+        Wait(0)
+    end
+    if UpdateOnscreenKeyboard() == 1 then
+        return GetOnscreenKeyboardResult()
+    end
+    return nil
+end
+
+local function sendVehicleAction(eventName, extra)
+    local vehicle = getTargetVehicle()
+    if vehicle == 0 then
+        notify('Nincs jármű a közeledben.', 'error')
+        return
+    end
+    local data = collectVehicleData(vehicle)
+    if not data then
+        notify('Nem sikerült beolvasni a jármű adatait.', 'error')
+        return
+    end
+    if extra ~= nil then
+        TriggerServerEvent(eventName, data, extra)
+    else
+        TriggerServerEvent(eventName, data)
+    end
+end
+
+RegisterCommand('biztositas', function()
+    sendVehicleAction('realrpg_forgalmi:server:buyInsurance')
+end, false)
+
+RegisterCommand('jarmuado', function()
+    sendVehicleAction('realrpg_forgalmi:server:payVehicleTax')
+end, false)
+
+RegisterCommand('forgalmi_potlas', function()
+    sendVehicleAction('realrpg_forgalmi:server:replaceDocument')
+end, false)
+
+RegisterCommand('rendszamcsere', function()
+    local newPlate = keyboardInput('Új rendszám', '', 8)
+    if not newPlate or newPlate == '' then return end
+    sendVehicleAction('realrpg_forgalmi:server:changePlate', newPlate)
+end, false)
+
+RegisterCommand('hamisforgalmi', function(_, args)
+    local quality = args and args[1] or 'medium'
+    sendVehicleAction('realrpg_forgalmi:server:createFakeDocument', quality)
+end, false)
+
+RegisterNetEvent('realrpg_forgalmi:client:setVehiclePlate', function(oldPlate, newPlate)
+    oldPlate = trimPlate(oldPlate)
+    newPlate = trimPlate(newPlate)
+    local vehicle = getTargetVehicle()
+    if vehicle ~= 0 and trimPlate(GetVehicleNumberPlateText(vehicle)) == oldPlate then
+        SetVehicleNumberPlateText(vehicle, newPlate)
+    end
+end)
+
+CreateThread(function()
+    Wait(3500)
+    local useTarget = Config.Interaction and Config.Interaction.UseOxTarget and oxTargetStarted()
+
+    if useTarget and officePed then
+        exports.ox_target:addLocalEntity(officePed, {
+            {
+                name = 'realrpg_forgalmi_insurance',
+                label = 'Kötelező biztosítás megkötése',
+                icon = 'fa-solid fa-shield-halved',
+                distance = Config.Interaction.InteractDistance or 2.2,
+                onSelect = function() sendVehicleAction('realrpg_forgalmi:server:buyInsurance') end
+            },
+            {
+                name = 'realrpg_forgalmi_tax',
+                label = 'Járműadó befizetése',
+                icon = 'fa-solid fa-file-invoice-dollar',
+                distance = Config.Interaction.InteractDistance or 2.2,
+                onSelect = function() sendVehicleAction('realrpg_forgalmi:server:payVehicleTax') end
+            },
+            {
+                name = 'realrpg_forgalmi_replace',
+                label = 'Forgalmi pótlása',
+                icon = 'fa-solid fa-copy',
+                distance = Config.Interaction.InteractDistance or 2.2,
+                onSelect = function() sendVehicleAction('realrpg_forgalmi:server:replaceDocument') end
+            },
+            {
+                name = 'realrpg_forgalmi_platechange',
+                label = 'Rendszámcsere / egyedi rendszám',
+                icon = 'fa-solid fa-rectangle-list',
+                distance = Config.Interaction.InteractDistance or 2.2,
+                onSelect = function()
+                    local newPlate = keyboardInput('Új rendszám', '', 8)
+                    if newPlate and newPlate ~= '' then
+                        sendVehicleAction('realrpg_forgalmi:server:changePlate', newPlate)
+                    end
+                end
+            }
+        })
+    end
+
+    if Config.IllegalNpc and Config.IllegalNpc.Enabled then
+        illegalPed = createNpc(Config.IllegalNpc)
+        if useTarget and illegalPed then
+            exports.ox_target:addLocalEntity(illegalPed, {
+                {
+                    name = 'realrpg_forgalmi_fake_weak',
+                    label = 'Hamis forgalmi - gyenge minőség',
+                    icon = Config.IllegalNpc.Icon or 'fa-solid fa-mask',
+                    distance = Config.Interaction.InteractDistance or 2.2,
+                    onSelect = function() sendVehicleAction('realrpg_forgalmi:server:createFakeDocument', 'weak') end
+                },
+                {
+                    name = 'realrpg_forgalmi_fake_medium',
+                    label = 'Hamis forgalmi - közepes minőség',
+                    icon = Config.IllegalNpc.Icon or 'fa-solid fa-mask',
+                    distance = Config.Interaction.InteractDistance or 2.2,
+                    onSelect = function() sendVehicleAction('realrpg_forgalmi:server:createFakeDocument', 'medium') end
+                },
+                {
+                    name = 'realrpg_forgalmi_fake_pro',
+                    label = 'Hamis forgalmi - profi minőség',
+                    icon = Config.IllegalNpc.Icon or 'fa-solid fa-mask',
+                    distance = Config.Interaction.InteractDistance or 2.2,
+                    onSelect = function() sendVehicleAction('realrpg_forgalmi:server:createFakeDocument', 'professional') end
+                }
+            })
+        end
+    end
+end)
+
+CreateThread(function()
+    Wait(1500)
+    if not Config.IllegalNpc or not Config.IllegalNpc.Enabled or not Config.Interaction or not Config.Interaction.DrawMarkers then return end
+    while true do
+        local sleep = 1000
+        local ped = PlayerPedId()
+        local pcoords = GetEntityCoords(ped)
+        local c = Config.IllegalNpc.Coords
+        local dist = #(pcoords - vector3(c.x, c.y, c.z))
+        if dist <= (Config.Interaction.MarkerDistance or 25.0) then
+            sleep = 0
+            drawLocationMarker(c)
+            if dist <= (Config.Interaction.InteractDistance or 2.2) then
+                showHelpText('~INPUT_CONTEXT~ Hamis forgalmi készítése')
+                if IsControlJustReleased(0, Config.Interaction.Key or 38) then
+                    sendVehicleAction('realrpg_forgalmi:server:createFakeDocument', 'medium')
+                end
+            end
+        end
+        Wait(sleep)
+    end
+end)
+
+RegisterNetEvent('realrpg_forgalmi:client:useFakeDocumentItem', function(item)
+    TriggerServerEvent('realrpg_forgalmi:server:openFakeDocument', item)
 end)

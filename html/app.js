@@ -41,7 +41,7 @@ function openService(payload) {
     serviceState = payload;
     selected = { inspection: true, fuel: false };
 
-    $('serviceCompany').textContent = payload.company || 'VAPID OF LOS SANTOS';
+    $('serviceCompany').textContent = payload.company || 'REAL OF LOS SANTOS';
     $('inspectionLabel').innerHTML = `${payload.inspection?.label || 'Műszaki vizsga'} <em>(${payload.inspection?.time || '00:15'})</em>`;
     $('inspectionPrice').textContent = fmtMoney(payload.inspection?.price || 0, payload.currency);
 
@@ -92,9 +92,9 @@ function openDocument(payload) {
     $('invalidStamp').classList.toggle('hidden', !invalid);
     $('invalidStamp').textContent = payload.invalidText || 'ÉRVÉNYTELEN';
 
-    setText('docCity', f.cityName || 'See City');
+    setText('docCity', f.cityName || 'Real City');
     setText('docTitle', f.title || 'Forgalmi engedély');
-    setText('docLogo', f.logo || 'SEE');
+    setText('docLogo', f.logo || 'REAL');
     setText('docSerial', payload.serial || 'NJ000000');
 
     setText('f_type', f.type);

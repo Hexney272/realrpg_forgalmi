@@ -1,6 +1,7 @@
 local ESX = exports['es_extended']:getSharedObject()
 local registeredItem = false
 local lastModCheck = {}
+local rejectBadVehicleCondition, getDocumentUid, webhookLog, createWorkOrder
 
 local function dprint(...)
     if Config.Debug then
@@ -53,7 +54,7 @@ local function vinFromPlate(plate)
     for i = 1, #clean do
         hash = (hash * 33 + clean:byte(i)) % 99999999
     end
-    return ('CHSEE%sN%s'):format(clean:sub(1, 5), tostring(hash):sub(1, 6))
+    return ('CHREAL%sN%s'):format(clean:sub(1, 5), tostring(hash):sub(1, 6))
 end
 
 local function engineCodeFromPlate(plate)
@@ -133,54 +134,18 @@ local function getOwnedVehicle(plate)
     return MySQL.single.await(query, { normalized })
 end
 
-local userColumnsCache = nil
-local function getUserColumns()
-    if userColumnsCache then return userColumnsCache end
-    userColumnsCache = {}
-
-    local ok, rows = pcall(function()
-        return MySQL.query.await([[
-            SELECT `COLUMN_NAME` AS col
-            FROM `INFORMATION_SCHEMA`.`COLUMNS`
-            WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = ?
-        ]], { Config.UsersTable })
-    end)
-
-    if ok and type(rows) == 'table' then
-        for _, r in ipairs(rows) do
-            if r and r.col then
-                userColumnsCache[tostring(r.col):lower()] = true
-            end
-        end
-    end
-
-    return userColumnsCache
-end
-
 local function getOwnerName(identifier)
     if not identifier then return 'Ismeretlen tulajdonos' end
 
-    local cols = getUserColumns()
-    local selectParts = {}
-
-    local firstCol = Config.UsersFirstnameColumn
-    local lastCol = Config.UsersLastnameColumn
-    local nameCol = Config.UsersNameColumn
-
-    -- Ha nem sikerült beolvasni az oszloplistát, próbáljuk a configban megadottakat.
-    local schemaKnown = next(cols) ~= nil
-    local hasFirst = firstCol and (not schemaKnown or cols[firstCol:lower()])
-    local hasLast = lastCol and (not schemaKnown or cols[lastCol:lower()])
-    local hasName = nameCol and schemaKnown and cols[nameCol:lower()]
-
-    if hasFirst then selectParts[#selectParts + 1] = ('`%s` AS firstname'):format(firstCol) end
-    if hasLast then selectParts[#selectParts + 1] = ('`%s` AS lastname'):format(lastCol) end
-    if hasName then selectParts[#selectParts + 1] = ('`%s` AS name'):format(nameCol) end
-
-    if #selectParts == 0 then return tostring(identifier) end
-
-    local query = ('SELECT %s FROM `%s` WHERE `%s` = ? LIMIT 1'):format(
-        table.concat(selectParts, ', '),
+    local query = ([[
+        SELECT `%s` AS firstname, `%s` AS lastname, `%s` AS name
+        FROM `%s`
+        WHERE `%s` = ?
+        LIMIT 1
+    ]]):format(
+        Config.UsersFirstnameColumn,
+        Config.UsersLastnameColumn,
+        Config.UsersNameColumn,
         Config.UsersTable,
         Config.UsersIdentifierColumn
     )
@@ -321,6 +286,7 @@ local function makeDisplayData(data, ownerName, vin, engineCode, validUntil, iss
 end
 
 local function upsertInspection(src, data, selectedFuel)
+    if rejectBadVehicleCondition and rejectBadVehicleCondition(src, data) then return end
     local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
     if ownerErr then
         notify(src, ownerErr, 'error')
@@ -350,7 +316,7 @@ local function upsertInspection(src, data, selectedFuel)
         INSERT INTO `vehicle_documents`
         (`plate`, `owner_identifier`, `owner_name`, `model_name`, `model_label`, `vin`, `engine_code`, `fuel_text`, `tier`,
          `inspection_done_at`, `inspection_valid_until`, `status`, `invalid_reason`, `serial`, `display_data`, `properties`, `last_seen_hash`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             `owner_identifier` = VALUES(`owner_identifier`),
             `owner_name` = VALUES(`owner_name`),
@@ -381,6 +347,7 @@ local function upsertInspection(src, data, selectedFuel)
         now,
         validUntil,
         'inspected',
+        nil,
         serial,
         safeEncode(display),
         safeEncode(data.properties),
@@ -391,6 +358,8 @@ local function upsertInspection(src, data, selectedFuel)
         TriggerClientEvent('realrpg_forgalmi:client:addFuel', src, Config.Fuel.Liters)
     end
 
+    if createWorkOrder then createWorkOrder(src, data, 'Műszaki vizsga', total, 'Műszaki vizsga elvégezve') end
+    if webhookLog then webhookLog('Műszaki vizsga', { Rendszám = data.plate, Ár = (tostring(total) .. ' ' .. Config.Currency) }) end
     notify(src, ('Sikeres műszaki vizsga. Fizetve: %s %s. Most menj az Okmányirodához a forgalmi kiállításához.'):format(total, Config.Currency), 'success')
 end
 
@@ -488,6 +457,8 @@ local function issueDocument(src, data)
         return
     end
 
+    MySQL.update.await('UPDATE `vehicle_documents` SET `doc_uid` = COALESCE(`doc_uid`, ?) WHERE `plate` = ?', { getDocumentUid and getDocumentUid({}) or serial, data.plate })
+    if webhookLog then webhookLog('Forgalmi kiállítva', { Rendszám = data.plate, Tulajdonos = ownerName, Okmányszám = serial }) end
     notify(src, 'A forgalmi engedély sikeresen kiállítva.', 'success')
 end
 
@@ -504,6 +475,10 @@ local function buildDocumentPayload(doc)
     display.tier = doc.tier or display.tier or Config.Document.DefaultTier
     display.inspectionValidUntil = humanDate(doc.inspection_valid_until)
     display.issueDate = humanDate(doc.issued_at or doc.inspection_done_at)
+    display.docUid = doc.doc_uid or doc.serial
+    display.insurance = doc.insurance_valid_until and humanDate(doc.insurance_valid_until) or 'nincs'
+    display.tax = doc.tax_paid_until and humanDate(doc.tax_paid_until) or 'nincs'
+    display.wanted = tonumber(doc.wanted) == 1 and 'KÖRÖZÖTT' or 'nem'
 
     return {
         serial = doc.serial or randomSerial(),
@@ -514,24 +489,6 @@ local function buildDocumentPayload(doc)
         fields = display
     }
 end
-
-RegisterNetEvent('realrpg_forgalmi:server:requestService', function(plate)
-    local src = source
-    plate = trimPlate(plate)
-    if not plate then
-        notify(src, 'Nem található rendszám.', 'error')
-        return
-    end
-
-    local owned, xPlayer, ownerErr = validateOwner(src, plate)
-    if ownerErr then
-        notify(src, ownerErr, 'error')
-        return
-    end
-
-    -- A jármű a sajátod -> jelezzük a kliensnek, hogy nyithatja a NUI-t.
-    TriggerClientEvent('realrpg_forgalmi:client:serviceApproved', src, plate)
-end)
 
 RegisterNetEvent('realrpg_forgalmi:server:runInspection', function(vehicleData, selections)
     local src = source
@@ -646,4 +603,365 @@ exports('InvalidateVehicleDocument', function(plate, reason)
     ]], { reason or 'A jármű módosítva lett', plate })
 
     return changed and changed > 0
+end)
+
+--[[
+    REALRPG FORGALMI EXTRA RP CSOMAG
+    Biztosítás, adó, pótlás, adásvétel, rendszámcsere, munkalap, hamis forgalmi,
+    körözési státusz, garázs exportok, Discord log.
+]]
+
+local pendingTransfers = {}
+
+local function tableHasGroup(group)
+    if not Config.Extras or not Config.Extras.Wanted or not Config.Extras.Wanted.AdminGroups then return false end
+    return Config.Extras.Wanted.AdminGroups[group] == true
+end
+
+local function isAdmin(src)
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return false end
+    local group = xPlayer.getGroup and xPlayer.getGroup() or 'user'
+    return tableHasGroup(group)
+end
+
+local function fmtMoney(amount)
+    return tostring(tonumber(amount) or 0) .. ' ' .. (Config.Currency or 'Ft')
+end
+
+webhookLog = function(title, fields)
+    if not Config.Discord or not Config.Discord.Enabled or not Config.Discord.Webhook or Config.Discord.Webhook == '' then return end
+    local embedFields = {}
+    for k, v in pairs(fields or {}) do
+        embedFields[#embedFields + 1] = { name = tostring(k), value = tostring(v), inline = true }
+    end
+    local payload = {
+        username = Config.Discord.Name or 'RealRPG Forgalmi Log',
+        embeds = {{
+            title = title,
+            color = Config.Discord.Color or 16762624,
+            fields = embedFields,
+            footer = { text = os.date('%Y.%m.%d %H:%M:%S') }
+        }}
+    }
+    PerformHttpRequest(Config.Discord.Webhook, function() end, 'POST', json.encode(payload), { ['Content-Type'] = 'application/json' })
+end
+
+local function addDaysFromNow(days)
+    return os.date('%Y-%m-%d %H:%M:%S', os.time() + ((tonumber(days) or 30) * 86400))
+end
+
+local function dateIsValid(sqlDate)
+    if not sqlDate then return false end
+    local y, m, d, h, mi, se = tostring(sqlDate):match('^(%d+)%-(%d+)%-(%d+)%s+(%d+):(%d+):?(%d*)')
+    if not y then return false end
+    return os.time({year=tonumber(y), month=tonumber(m), day=tonumber(d), hour=tonumber(h), min=tonumber(mi), sec=tonumber(se) or 0}) >= os.time()
+end
+
+local function ensureExtraColumns()
+    local alters = {
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `insurance_valid_until` DATETIME DEFAULT NULL",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `tax_paid_until` DATETIME DEFAULT NULL",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `wanted` TINYINT(1) NOT NULL DEFAULT 0",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `wanted_reason` VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `wanted_by` VARCHAR(128) DEFAULT NULL",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `doc_uid` VARCHAR(64) DEFAULT NULL",
+        "ALTER TABLE `vehicle_documents` ADD COLUMN IF NOT EXISTS `fake_quality` VARCHAR(32) DEFAULT NULL"
+    }
+    for _, q in ipairs(alters) do pcall(function() MySQL.query.await(q) end) end
+    pcall(function() MySQL.query.await("CREATE INDEX IF NOT EXISTS `idx_vehicle_documents_doc_uid` ON `vehicle_documents` (`doc_uid`)") end)
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `vehicle_document_workorders` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `plate` VARCHAR(16) NOT NULL,
+            `owner_identifier` VARCHAR(80) DEFAULT NULL,
+            `mechanic_identifier` VARCHAR(80) DEFAULT NULL,
+            `type` VARCHAR(64) NOT NULL,
+            `price` INT NOT NULL DEFAULT 0,
+            `notes` TEXT DEFAULT NULL,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`), KEY `idx_vdw_plate` (`plate`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `vehicle_document_transfers` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `plate` VARCHAR(16) NOT NULL,
+            `seller_identifier` VARCHAR(80) NOT NULL,
+            `buyer_identifier` VARCHAR(80) NOT NULL,
+            `price` INT NOT NULL DEFAULT 0,
+            `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `accepted_at` DATETIME DEFAULT NULL,
+            PRIMARY KEY (`id`), KEY `idx_vdt_plate` (`plate`), KEY `idx_vdt_buyer` (`buyer_identifier`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+end
+
+CreateThread(function()
+    Wait(1500)
+    ensureExtraColumns()
+    print('^2[realrpg_forgalmi]^7 extra RP modulok betöltve.')
+end)
+
+getDocumentUid = function(doc)
+    if doc and doc.doc_uid and doc.doc_uid ~= '' then return doc.doc_uid end
+    return 'REAL-VEH-' .. tostring(math.random(100000, 999999))
+end
+
+createWorkOrder = function(src, data, wtype, price, notes)
+    if not Config.Extras or not Config.Extras.WorkOrder or not Config.Extras.WorkOrder.Enabled then return end
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer or not data or not data.plate then return end
+    MySQL.insert.await('INSERT INTO `vehicle_document_workorders` (`plate`, `owner_identifier`, `mechanic_identifier`, `type`, `price`, `notes`) VALUES (?, ?, ?, ?, ?, ?)', {
+        data.plate, xPlayer.identifier, xPlayer.identifier, wtype or 'művelet', tonumber(price) or 0, notes or ''
+    })
+    local metadata = {
+        plate = data.plate,
+        description = ('Rendszám: %s | %s | %s'):format(data.plate, wtype or 'Munkalap', fmtMoney(price or 0)),
+        label = ('Szerviz munkalap - %s'):format(data.plate)
+    }
+    exports.ox_inventory:AddItem(src, Config.Extras.WorkOrder.ItemName or 'szerviz_munkalap', 1, metadata)
+end
+
+rejectBadVehicleCondition = function(src, data)
+    local h = Config.Extras and Config.Extras.InspectionHealth
+    if not h or not h.Enabled then return false end
+    local health = data.health or {}
+    local engine = tonumber(health.engine) or 1000.0
+    local body = tonumber(health.body) or 1000.0
+    local tank = tonumber(health.tank) or 1000.0
+    if engine < (h.MinEngine or 850.0) then
+        notify(src, ('A jármű nem felelt meg a műszakin. Motor állapota: %.0f/1000'):format(engine), 'error')
+        return true
+    end
+    if body < (h.MinBody or 850.0) then
+        notify(src, ('A jármű nem felelt meg a műszakin. Karosszéria állapota: %.0f/1000'):format(body), 'error')
+        return true
+    end
+    if tank < (h.MinTank or 900.0) then
+        notify(src, ('A jármű nem felelt meg a műszakin. Tank állapota: %.0f/1000'):format(tank), 'error')
+        return true
+    end
+    return false
+end
+
+AddEventHandler('realrpg_forgalmi:server:inspectionPassedExtra', function(src, data, total)
+    createWorkOrder(src, data, 'Műszaki vizsga', total or Config.Inspection.Price, 'Műszaki vizsga elvégezve')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:buyInsurance', function(vehicleData)
+    local src = source
+    if not Config.Extras or not Config.Extras.Insurance or not Config.Extras.Insurance.Enabled then return end
+    local data, err = ensureVehicleData(vehicleData)
+    if not data then notify(src, err or 'Hibás jármű adat.', 'error') return end
+    local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+    local price = Config.Extras.Insurance.Price or 75000
+    if not removePlayerMoney(xPlayer, price) then notify(src, 'Nincs elég pénzed biztosításra: ' .. fmtMoney(price), 'error') return end
+    local untilDate = addDaysFromNow(Config.Extras.Insurance.ValidityDays or 30)
+    MySQL.update.await('UPDATE `vehicle_documents` SET `insurance_valid_until` = ?, `doc_uid` = COALESCE(`doc_uid`, ?) WHERE `plate` = ?', { untilDate, getDocumentUid({}), data.plate })
+    createWorkOrder(src, data, 'Kötelező biztosítás', price, 'Biztosítás megkötve eddig: ' .. humanDate(untilDate))
+    webhookLog('Biztosítás kötve', { Játékos = xPlayer.identifier, Rendszám = data.plate, Ár = fmtMoney(price), Lejárat = humanDate(untilDate) })
+    notify(src, 'Kötelező biztosítás megkötve. Lejárat: ' .. humanDate(untilDate), 'success')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:payVehicleTax', function(vehicleData)
+    local src = source
+    if not Config.Extras or not Config.Extras.Tax or not Config.Extras.Tax.Enabled then return end
+    local data, err = ensureVehicleData(vehicleData)
+    if not data then notify(src, err or 'Hibás jármű adat.', 'error') return end
+    local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+    local class = tonumber(data.vehicleClass) or 0
+    local price = (Config.Extras.Tax.PricesByClass and Config.Extras.Tax.PricesByClass[class]) or Config.Extras.Tax.BasePrice or 25000
+    if not removePlayerMoney(xPlayer, price) then notify(src, 'Nincs elég pénzed járműadóra: ' .. fmtMoney(price), 'error') return end
+    local untilDate = addDaysFromNow(Config.Extras.Tax.ValidityDays or 30)
+    MySQL.update.await('UPDATE `vehicle_documents` SET `tax_paid_until` = ?, `doc_uid` = COALESCE(`doc_uid`, ?) WHERE `plate` = ?', { untilDate, getDocumentUid({}), data.plate })
+    createWorkOrder(src, data, 'Járműadó', price, 'Adó befizetve eddig: ' .. humanDate(untilDate))
+    webhookLog('Járműadó befizetve', { Játékos = xPlayer.identifier, Rendszám = data.plate, Ár = fmtMoney(price), Lejárat = humanDate(untilDate) })
+    notify(src, 'Járműadó befizetve. Érvényes eddig: ' .. humanDate(untilDate), 'success')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:replaceDocument', function(vehicleData)
+    local src = source
+    if not Config.Extras or not Config.Extras.Replacement or not Config.Extras.Replacement.Enabled then return end
+    local data, err = ensureVehicleData(vehicleData)
+    if not data then notify(src, err or 'Hibás jármű adat.', 'error') return end
+    local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+    local doc = getDocumentByPlate(data.plate)
+    if not doc or doc.status ~= 'valid' then notify(src, 'Csak érvényes, már kiállított forgalmit lehet pótolni.', 'error') return end
+    local price = Config.Extras.Replacement.Price or 50000
+    if not removePlayerMoney(xPlayer, price) then notify(src, 'Nincs elég pénzed pótlásra: ' .. fmtMoney(price), 'error') return end
+    giveOrUpdateDocumentItem(src, data.plate)
+    createWorkOrder(src, data, 'Forgalmi pótlás', price, 'Elveszett/megsemmisült forgalmi pótlása')
+    webhookLog('Forgalmi pótolva', { Játékos = xPlayer.identifier, Rendszám = data.plate, Ár = fmtMoney(price) })
+    notify(src, 'Forgalmi engedély pótolva.', 'success')
+end)
+
+local function plateAvailable(newPlate)
+    local row = getOwnedVehicle(newPlate)
+    return row == nil
+end
+
+RegisterNetEvent('realrpg_forgalmi:server:changePlate', function(vehicleData, newPlate)
+    local src = source
+    if not Config.Extras or not Config.Extras.PlateChange or not Config.Extras.PlateChange.Enabled then return end
+    local data, err = ensureVehicleData(vehicleData)
+    if not data then notify(src, err or 'Hibás jármű adat.', 'error') return end
+    newPlate = trimPlate(newPlate)
+    local pcfg = Config.Extras.PlateChange
+    if not newPlate or #newPlate < (pcfg.MinLength or 2) or #newPlate > (pcfg.MaxLength or 8) or newPlate:find('[^A-Z0-9%-]') then
+        notify(src, 'Hibás rendszám. Csak A-Z, 0-9 és kötőjel használható.', 'error') return
+    end
+    if not plateAvailable(newPlate) then notify(src, 'Ez a rendszám már foglalt.', 'error') return end
+    local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+    local price = (#newPlate <= 6 and pcfg.NormalPrice or pcfg.CustomPrice) or pcfg.CustomPrice or 500000
+    if not removePlayerMoney(xPlayer, price) then notify(src, 'Nincs elég pénzed rendszámcserére: ' .. fmtMoney(price), 'error') return end
+    local veh = safeDecode(owned.vehicle)
+    veh.plate = newPlate
+    MySQL.update.await(([[UPDATE `%s` SET `%s` = ?, `%s` = ? WHERE REPLACE(UPPER(`%s`), ' ', '') = ? LIMIT 1]]):format(Config.VehicleTable, Config.VehiclePlateColumn, Config.VehicleDataColumn, Config.VehiclePlateColumn), {
+        newPlate, safeEncode(veh), normalizePlateForSql(data.plate)
+    })
+    MySQL.update.await('UPDATE `vehicle_documents` SET `plate` = ?, `status` = ?, `invalid_reason` = ?, `doc_uid` = ? WHERE `plate` = ?', {
+        newPlate, 'invalid', 'Rendszámcsere után új forgalmit kell kiállítani', getDocumentUid({}), data.plate
+    })
+    createWorkOrder(src, { plate = newPlate }, 'Rendszámcsere', price, 'Régi rendszám: ' .. data.plate)
+    webhookLog('Rendszámcsere', { Játékos = xPlayer.identifier, Régi = data.plate, Új = newPlate, Ár = fmtMoney(price) })
+    TriggerClientEvent('realrpg_forgalmi:client:setVehiclePlate', src, data.plate, newPlate)
+    notify(src, 'Rendszámcsere sikeres. Az új rendszám: ' .. newPlate .. '. Új forgalmi szükséges.', 'success')
+end)
+
+RegisterCommand('adasvetel', function(src, args)
+    if src == 0 then return end
+    local target = tonumber(args[1])
+    local price = tonumber(args[2]) or 0
+    local plate = trimPlate(args[3])
+    if not target or not GetPlayerName(target) or not plate then
+        notify(src, 'Használat: /adasvetel [játékos ID] [ár] [rendszám]', 'error') return
+    end
+    local xSeller = ESX.GetPlayerFromId(src)
+    local xBuyer = ESX.GetPlayerFromId(target)
+    if not xSeller or not xBuyer then return end
+    local owned, _, ownerErr = validateOwner(src, plate)
+    if ownerErr then notify(src, ownerErr, 'error') return end
+    local key = normalizePlateForSql(plate)
+    pendingTransfers[key] = { seller = src, buyer = target, sellerIdentifier = xSeller.identifier, buyerIdentifier = xBuyer.identifier, price = price, plate = plate, expires = os.time() + ((Config.Extras.SaleContract.PendingMinutes or 10) * 60) }
+    MySQL.insert.await('INSERT INTO `vehicle_document_transfers` (`plate`, `seller_identifier`, `buyer_identifier`, `price`) VALUES (?, ?, ?, ?)', { plate, xSeller.identifier, xBuyer.identifier, price })
+    notify(src, 'Adásvételi ajánlat elküldve. Rendszám: ' .. plate, 'success')
+    notify(target, ('Adásvételi ajánlat érkezett. Rendszám: %s | Ár: %s. Elfogadás: /adasvetel_elfogad %s'):format(plate, fmtMoney(price), plate), 'info')
+end, false)
+
+RegisterCommand('adasvetel_elfogad', function(src, args)
+    if src == 0 then return end
+    local plate = trimPlate(args[1])
+    if not plate then notify(src, 'Használat: /adasvetel_elfogad [rendszám]', 'error') return end
+    local key = normalizePlateForSql(plate)
+    local t = pendingTransfers[key]
+    if not t or t.buyer ~= src or t.expires < os.time() then notify(src, 'Nincs aktív adásvételi ajánlat erre a rendszámra.', 'error') return end
+    local xBuyer = ESX.GetPlayerFromId(src)
+    local xSeller = ESX.GetPlayerFromId(t.seller)
+    if not xBuyer then return end
+    if t.price > 0 and not removePlayerMoney(xBuyer, t.price) then notify(src, 'Nincs elég pénzed az autó megvásárlásához.', 'error') return end
+    if xSeller and t.price > 0 then xSeller.addMoney(t.price) end
+    MySQL.update.await(([[UPDATE `%s` SET `%s` = ? WHERE REPLACE(UPPER(`%s`), ' ', '') = ? LIMIT 1]]):format(Config.VehicleTable, Config.VehicleOwnerColumn, Config.VehiclePlateColumn), { xBuyer.identifier, key })
+    MySQL.update.await('UPDATE `vehicle_documents` SET `owner_identifier` = ?, `owner_name` = ?, `status` = ?, `invalid_reason` = ? WHERE `plate` = ?', { xBuyer.identifier, getOwnerName(xBuyer.identifier), 'invalid', 'Tulajdonosváltás után új forgalmit kell kiállítani', plate })
+    MySQL.update.await('UPDATE `vehicle_document_transfers` SET `status` = ?, `accepted_at` = ? WHERE `plate` = ? AND `buyer_identifier` = ? AND `status` = ? ORDER BY `id` DESC LIMIT 1', { 'accepted', sqlNow(), plate, xBuyer.identifier, 'pending' })
+    exports.ox_inventory:AddItem(src, Config.Extras.SaleContract.ItemName or 'adasveteli_szerzodes', 1, { plate = plate, description = ('Rendszám: %s | Ár: %s'):format(plate, fmtMoney(t.price)), label = 'Adásvételi szerződés - ' .. plate })
+    pendingTransfers[key] = nil
+    webhookLog('Adásvétel elfogadva', { Rendszám = plate, Vevő = xBuyer.identifier, Eladó = t.sellerIdentifier, Ár = fmtMoney(t.price) })
+    notify(src, 'Sikeres adásvétel. Az okmányirodában új forgalmit kell kiállítanod.', 'success')
+    if xSeller then notify(t.seller, 'A vevő elfogadta az adásvételt. Pénz jóváírva.', 'success') end
+end, false)
+
+RegisterCommand('jarmu_korozes', function(src, args)
+    if src == 0 then return end
+    if not isAdmin(src) then notify(src, 'Nincs jogosultságod.', 'error') return end
+    local plate = trimPlate(args[1])
+    local state = tostring(args[2] or '1')
+    local reason = table.concat(args, ' ', 3)
+    if not plate then notify(src, 'Használat: /jarmu_korozes [rendszám] [1/0] [indok]', 'error') return end
+    local wanted = state ~= '0'
+    local xPlayer = ESX.GetPlayerFromId(src)
+    MySQL.update.await('UPDATE `vehicle_documents` SET `wanted` = ?, `wanted_reason` = ?, `wanted_by` = ? WHERE `plate` = ?', { wanted and 1 or 0, wanted and (reason ~= '' and reason or 'Nincs indok') or nil, wanted and getOwnerName(xPlayer.identifier) or nil, plate })
+    webhookLog(wanted and 'Jármű körözés alá helyezve' or 'Jármű körözés levéve', { Rendszám = plate, Indok = reason ~= '' and reason or '-', Admin = xPlayer.identifier })
+    notify(src, wanted and 'Jármű körözés alá helyezve.' or 'Jármű körözés levéve.', 'success')
+end, false)
+
+RegisterNetEvent('realrpg_forgalmi:server:createFakeDocument', function(vehicleData, quality)
+    local src = source
+    if not Config.Extras or not Config.Extras.FakeDocument or not Config.Extras.FakeDocument.Enabled then return end
+    local data, err = ensureVehicleData(vehicleData)
+    if not data then notify(src, err or 'Hibás jármű adat.', 'error') return end
+    quality = tostring(quality or 'medium')
+    local price = Config.Extras.FakeDocument.Prices[quality] or Config.Extras.FakeDocument.Prices.medium or 500000
+    local xPlayer = ESX.GetPlayerFromId(src)
+    if not xPlayer then return end
+    if not removePlayerMoney(xPlayer, price) then notify(src, 'Nincs elég pénzed hamis forgalmira: ' .. fmtMoney(price), 'error') return end
+    local fakeDisplay = data.display or {}
+    fakeDisplay.cityName = Config.Document.CityName
+    fakeDisplay.logo = Config.Document.Logo
+    fakeDisplay.title = Config.Document.Title
+    fakeDisplay.plate = data.plate
+    fakeDisplay.owner = getOwnerName(xPlayer.identifier)
+    fakeDisplay.vin = vinFromPlate(data.plate)
+    fakeDisplay.engineCode = engineCodeFromPlate(data.plate)
+    fakeDisplay.inspectionValidUntil = humanDate(addDaysFromNow(365))
+    fakeDisplay.issueDate = humanDate(sqlNow())
+    exports.ox_inventory:AddItem(src, Config.Extras.FakeDocument.ItemName or 'hamis_forgalmi', 1, {
+        plate = data.plate,
+        fake = true,
+        quality = quality,
+        serial = 'REAL-FAKE-' .. tostring(math.random(100000, 999999)),
+        display_data = safeEncode(fakeDisplay),
+        description = ('Hamis forgalmi | Rendszám: %s | Minőség: %s'):format(data.plate, quality),
+        label = 'Hamis forgalmi - ' .. data.plate
+    })
+    webhookLog('Hamis forgalmi készült', { Játékos = xPlayer.identifier, Rendszám = data.plate, Minőség = quality, Ár = fmtMoney(price) })
+    notify(src, 'Hamis forgalmi elkészült. Minőség: ' .. quality, 'success')
+end)
+
+RegisterNetEvent('realrpg_forgalmi:server:openFakeDocument', function(item)
+    local src = source
+    local md = item and item.metadata or {}
+    local display = safeDecode(md.display_data)
+    if not display or not display.plate then notify(src, 'Hibás hamis forgalmi.', 'error') return end
+    TriggerClientEvent('realrpg_forgalmi:client:openDocument', src, {
+        serial = md.serial or 'REAL-FAKE',
+        status = 'valid',
+        invalid = false,
+        invalidText = Config.Document.InvalidStamp,
+        invalidReason = nil,
+        fake = true,
+        quality = md.quality or 'medium',
+        fields = display
+    })
+end)
+
+exports('GetVehicleDocumentStatus', function(plate)
+    local doc = getDocumentByPlate(plate)
+    if not doc then return { exists = false } end
+    return {
+        exists = true,
+        plate = doc.plate,
+        status = doc.status,
+        inspectionValid = dateIsValid(doc.inspection_valid_until),
+        insuranceValid = dateIsValid(doc.insurance_valid_until),
+        taxValid = dateIsValid(doc.tax_paid_until),
+        wanted = tonumber(doc.wanted) == 1,
+        wantedReason = doc.wanted_reason,
+        uid = doc.doc_uid or doc.serial
+    }
+end)
+
+exports('CanTakeVehicleFromGarage', function(plate)
+    local doc = getDocumentByPlate(plate)
+    if not doc then return true, 'nincs forgalmi adat' end
+    local g = Config.Extras and Config.Extras.Garage or {}
+    if g.BlockIfInspectionInvalid and doc.status ~= 'valid' then return false, 'érvénytelen műszaki/forgalmi' end
+    if g.BlockIfInsuranceExpired and not dateIsValid(doc.insurance_valid_until) then return false, 'lejárt biztosítás' end
+    if g.BlockIfTaxExpired and not dateIsValid(doc.tax_paid_until) then return false, 'lejárt járműadó' end
+    return true, 'ok'
 end)
