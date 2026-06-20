@@ -24,7 +24,7 @@ Config.OnlyOwnerCanUse = true
 -- MŰSZAKI VIZSGA
 Config.Inspection = {
     Price = 150000,
-    ValidityDays = 365,
+    ValidityDays = 15,
     CompanyName = 'REAL OF LOS SANTOS',
     RepairDurationMinutes = 0,
     ClubSpeedupMinutes = 0,
