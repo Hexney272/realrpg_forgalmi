@@ -812,7 +812,7 @@ end)
 
 CreateThread(function()
     if not Config.InvalidateOnModification then return end
-    Wait(8000)
+    Wait(10000)
 
     while true do
         Wait(Config.ModificationCheckIntervalMs)
@@ -820,26 +820,17 @@ CreateThread(function()
         local vehicle = GetVehiclePedIsIn(ped, false)
 
         if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
-            -- Várunk hogy a vms_tuning és egyéb scriptek biztosan betöltsék a modokat
-            Wait(3000)
-            -- Újra ellenőrizzük hogy még mindig a járműben ülünk-e
-            if GetVehiclePedIsIn(PlayerPedId(), false) ~= vehicle then goto continue end
-
-            SetVehicleModKit(vehicle, 0)
-            Wait(200)
-
-            local data = collectVehicleData(vehicle)
-            if data then
+            local plate = trimPlate(GetVehicleNumberPlateText(vehicle))
+            if plate and plate ~= '' then
                 local now = GetGameTimer()
-                if lastSent.plate ~= data.plate or lastSent.hash ~= data.modHash or now - lastSent.at > 60000 then
-                    lastSent.plate = data.plate
-                    lastSent.hash = data.modHash
+                if lastSent.plate ~= plate or now - lastSent.at > 60000 then
+                    lastSent.plate = plate
                     lastSent.at = now
-                    TriggerServerEvent('realrpg_forgalmi:server:modificationCheck', data)
+                    -- Csak a rendszámot küldjük - a szerver az SQL-ből generálja a hash-t
+                    TriggerServerEvent('realrpg_forgalmi:server:modificationCheck', plate)
                 end
             end
         end
-        ::continue::
     end
 end)
 

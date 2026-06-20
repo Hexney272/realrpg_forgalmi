@@ -452,7 +452,7 @@ local function upsertInspection(src, data, selectedFuel)
         serial,
         safeEncode(display),
         safeEncode(data.properties),
-        data.modHash
+        generateServerSideHash(data.plate) or data.modHash
     })
 
     if selectedFuel and Config.Fuel.Enabled then
@@ -516,6 +516,9 @@ local function issueDocument(src, data)
     local display = makeDisplayData(data, ownerName, vin, engineCode, validUntil, now)
     local serial = doc.serial and doc.serial ~= '' and doc.serial or randomSerial()
 
+    -- Szerver oldali hash generálás (ugyanaz mint a modificationCheck-ben)
+    local serverHash = generateServerSideHash(data.plate) or data.modHash
+
     MySQL.update.await([[
         UPDATE `vehicle_documents`
         SET `owner_identifier` = ?,
@@ -550,8 +553,8 @@ local function issueDocument(src, data)
         serial,
         safeEncode(display),
         safeEncode(data.properties),
-        data.modHash,
-        data.modHash,
+        serverHash,
+        serverHash,
         data.plate
     })
 
@@ -731,67 +734,63 @@ RegisterNetEvent('realrpg_forgalmi:server:issueDocument', function(vehicleData)
     issueDocument(src, data)
 end)
 
-RegisterNetEvent('realrpg_forgalmi:server:modificationCheck', function(vehicleData)
+-- Szerver oldali hash generálás az SQL adatokból (konzisztens, nincs timing probléma)
+local function generateServerSideHash(plate)
+    local hashParts = {}
+
+    -- 1. owned_vehicles.vehicle JSON (vms_tuning tuning adatok)
+    local owned = getOwnedVehicle(plate)
+    if owned and owned.vehicle and owned.vehicle ~= '' then
+        hashParts[#hashParts + 1] = tostring(owned.vehicle)
+    end
+
+    -- 2. tuff_nitro_installs.data (NOS/backfire adatok)
+    local tuffData = getTuffNitroData(plate)
+    if tuffData then
+        -- Csak a lényeges mezőket vesszük bele (amik változnak ha módosítanak)
+        hashParts[#hashParts + 1] = tostring(tuffData.nitrousColor or '')
+        hashParts[#hashParts + 1] = tostring(tuffData.exhaustId or '')
+        hashParts[#hashParts + 1] = tostring(tuffData.hasExhaust or false)
+        if tuffData.antilag2step then
+            hashParts[#hashParts + 1] = tostring(tuffData.antilag2step.enableAntiLag or false)
+        end
+    end
+
+    if #hashParts == 0 then return nil end
+    local combined = table.concat(hashParts, '|')
+    return tostring(GetHashKey(combined))
+end
+
+RegisterNetEvent('realrpg_forgalmi:server:modificationCheck', function(plate)
     if not Config.InvalidateOnModification then return end
     local src = source
-    local data, err = ensureVehicleData(vehicleData)
-    if not data then return end
+    plate = trimPlate(plate)
+    if not plate or plate == '' then return end
 
-    local key = src .. ':' .. data.plate
+    local key = src .. ':' .. plate
     local now = GetGameTimer()
     if lastModCheck[key] and now - lastModCheck[key] < (Config.ModificationCheckIntervalMs - 1000) then return end
-
-    local doc = getDocumentByPlate(data.plate)
-    if not doc or doc.status ~= 'valid' then
-        lastModCheck[key] = now
-        return
-    end
-    if not doc.mod_hash or doc.mod_hash == '' then
-        lastModCheck[key] = now
-        return
-    end
-
-    -- Az ELSŐ ellenőrzésnél (járműbe ülés után) frissítjük a last_seen_hash-t
-    -- de NEM érvénytelenítünk. Csak ha a 2. ellenőrzés is mást mutat.
-    if not lastModCheck[key] then
-        -- Ez az első check erre a plate-re – csak mentjük a hash-t, nem invalidálunk
-        lastModCheck[key] = now
-        -- Frissítjük a DB-ben a last_seen_hash-t a jelenlegi állapotra
-        MySQL.update.await('UPDATE `vehicle_documents` SET `last_seen_hash` = ? WHERE `plate` = ? AND `status` = ?', {
-            data.modHash, data.plate, 'valid'
-        })
-        return
-    end
-
     lastModCheck[key] = now
 
-    -- Összehasonlítás: a DB-ben tárolt mod_hash vs kliens hash
-    if tostring(doc.mod_hash) ~= tostring(data.modHash) then
-        -- Második ellenőrzés: ha a last_seen_hash sem egyezik, AKKOR érvénytelenítünk
-        -- (Ha a last_seen_hash egyezik a jelenlegi hash-sel, az azt jelenti csak betöltési késleltetés volt)
-        if doc.last_seen_hash and tostring(doc.last_seen_hash) == tostring(data.modHash) then
-            -- A jármű állapota stabil (az előző check-nél is ezt láttuk) de eltér a forgalmi kiállításkori hash-től
-            MySQL.update.await([[
-                UPDATE `vehicle_documents`
-                SET `status` = 'invalid',
-                    `invalid_reason` = 'A jármű módosítva lett a forgalmi kiállítása után',
-                    `last_seen_hash` = ?,
-                    `display_data` = ?,
-                    `properties` = ?
-                WHERE `plate` = ? AND `status` = 'valid'
-            ]], {
-                data.modHash,
-                safeEncode(data.display or {}),
-                safeEncode(data.properties or {}),
-                data.plate
-            })
-            notify(src, ('A(z) %s rendszámú jármű forgalmija ÉRVÉNYTELEN lett, mert a jármű módosítva lett.'):format(data.plate), 'error')
-        else
-            -- Első eltérés: csak mentjük az állapotot, következő check-nél döntünk
-            MySQL.update.await('UPDATE `vehicle_documents` SET `last_seen_hash` = ? WHERE `plate` = ?', {
-                data.modHash, data.plate
-            })
-        end
+    local doc = getDocumentByPlate(plate)
+    if not doc or doc.status ~= 'valid' then return end
+    if not doc.mod_hash or doc.mod_hash == '' then return end
+
+    -- Szerver oldali hash generálás az SQL adatokból
+    local currentHash = generateServerSideHash(plate)
+    if not currentHash then return end
+
+    if tostring(doc.mod_hash) ~= currentHash then
+        -- Érvénytelenítés
+        MySQL.update.await([[
+            UPDATE `vehicle_documents`
+            SET `status` = 'invalid',
+                `invalid_reason` = 'A jármű módosítva lett a forgalmi kiállítása után',
+                `last_seen_hash` = ?
+            WHERE `plate` = ? AND `status` = 'valid'
+        ]], { currentHash, plate })
+
+        notify(src, ('A(z) %s rendszámú jármű forgalmija ÉRVÉNYTELEN lett, mert a jármű módosítva lett.'):format(plate), 'error')
     end
 end)
 
