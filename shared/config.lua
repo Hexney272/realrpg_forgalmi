@@ -33,7 +33,7 @@ Config.Inspection = {
 
 -- A második képen látható 5L üzemanyag sor. Kikapcsolható, de alapból benne van.
 Config.Fuel = {
-    Enabled = true,
+    Enabled = false,
     Label = '5L üzemanyag',
     Liters = 5,
     Price = 25000
