@@ -687,16 +687,35 @@ local function buildDocumentPayload(doc)
                 return levelNames[modValue] or ('Szint ' .. tostring(modValue + 1))
             end
             -- Szín kiolvasás a vehicle JSON-ból
-            local function colorLabel(idx)
-                idx = tonumber(idx)
+            local function colorLabel(value)
+                if value == nil then return nil end
+                -- Ha tábla (RGB szín): {r, g, b} formátum
+                if type(value) == 'table' then
+                    local r = tonumber(value[1] or value.r) or 0
+                    local g = tonumber(value[2] or value.g) or 0
+                    local b = tonumber(value[3] or value.b) or 0
+                    -- Próbáljuk felismerni a színt
+                    if r > 220 and g > 220 and b > 220 then return 'Fehér' end
+                    if r < 30 and g < 30 and b < 30 then return 'Fekete' end
+                    if r > 150 and g > 150 and b > 150 then return 'Ezüst/Szürke' end
+                    if r > g and r > b then return 'Piros' end
+                    if g > r and g > b then return 'Zöld' end
+                    if b > r and b > g then return 'Kék' end
+                    return ('RGB %d,%d,%d'):format(r, g, b)
+                end
+                -- Ha szám (GTA szín index)
+                local idx = tonumber(value)
                 if not idx then return nil end
                 return Config.ColorNames[idx] or ('szín #' .. idx)
             end
-            if vehData.color1 ~= nil then
-                display.primaryColor = colorLabel(vehData.color1) or display.primaryColor
+            -- ESX Legacy: color1/color2 VAGY colorPrimary/colorSecondary
+            local c1 = vehData.color1 or vehData.colorPrimary
+            local c2 = vehData.color2 or vehData.colorSecondary
+            if c1 ~= nil then
+                display.primaryColor = colorLabel(c1) or display.primaryColor
             end
-            if vehData.color2 ~= nil then
-                display.secondaryColor = colorLabel(vehData.color2) or display.secondaryColor
+            if c2 ~= nil then
+                display.secondaryColor = colorLabel(c2) or display.secondaryColor
             end
             if vehData.interiorColor ~= nil then
                 display.interiorColor = colorLabel(vehData.interiorColor) or display.interiorColor
@@ -706,6 +725,11 @@ local function buildDocumentPayload(doc)
             end
             if vehData.wheelColor ~= nil then
                 display.rimPaint = colorLabel(vehData.wheelColor) or display.rimPaint
+            end
+            -- pearlescentColor (gyöngyház)
+            if vehData.pearlescentColor ~= nil then
+                local pLabel = colorLabel(vehData.pearlescentColor)
+                if pLabel then display.rimPaint = display.rimPaint end -- pearlescentColor nem megy a rim-be
             end
 
             -- Tuning szintek kiolvasása

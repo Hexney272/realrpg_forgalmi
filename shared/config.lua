@@ -142,7 +142,26 @@ Config.ColorNames = {
     [50] = 'Bükk barna', [51] = 'Sienna barna', [52] = 'Saddle barna', [53] = 'Moss barna', [54] = 'Wood barna',
     [55] = 'Straw barna', [56] = 'Sandy barna', [57] = 'Bleached barna', [58] = 'Schafter lila', [59] = 'Spinnaker lila',
     [60] = 'Midnight lila', [61] = 'Bright lila', [62] = 'Cream', [63] = 'Jég fehér', [64] = 'Fagy fehér',
-    [111] = 'Fehér', [112] = 'Fagy fehér', [120] = 'Króm', [131] = 'Fehér', [134] = 'Tiszta fehér'
+    [65] = 'Narancs', [66] = 'Narancs', [67] = 'Narancs', [68] = 'Narancs', [69] = 'Narancs',
+    [70] = 'Sötét zöld', [71] = 'Zöld', [72] = 'Zöld', [73] = 'Zöld metál', [74] = 'Lime',
+    [75] = 'Sárga', [76] = 'Sötét kék', [77] = 'Kék', [78] = 'Sötét kék', [79] = 'Kék',
+    [80] = 'Kék', [81] = 'Kék', [82] = 'Kék', [83] = 'Kék', [84] = 'Kék',
+    [85] = 'Lila', [86] = 'Sötét lila', [87] = 'Lila', [88] = 'Bordó', [89] = 'Bordó',
+    [90] = 'Sötét bordó', [91] = 'Sötét piros', [92] = 'Piros', [93] = 'Narancs piros', [94] = 'Narancs',
+    [95] = 'Sárga', [96] = 'Arany', [97] = 'Arany', [98] = 'Arany', [99] = 'Olive',
+    [100] = 'Zöld', [101] = 'Sötét zöld', [102] = 'Sötét kék', [103] = 'Kék', [104] = 'Sötét lila',
+    [105] = 'Lila', [106] = 'Sötét piros', [107] = 'Piros', [108] = 'Narancs', [109] = 'Sárga',
+    [110] = 'Lime', [111] = 'Fehér', [112] = 'Fagy fehér', [113] = 'Sötét szürke', [114] = 'Szürke',
+    [115] = 'Világos szürke', [116] = 'Sötét szürke', [117] = 'Szürke', [118] = 'Szürke', [119] = 'Világos szürke',
+    [120] = 'Króm', [121] = 'Fekete', [122] = 'Sötét szürke', [123] = 'Szürke', [124] = 'Világos szürke',
+    [125] = 'Fehér', [126] = 'Világos kék', [127] = 'Sötét kék', [128] = 'Sötét kék', [129] = 'Kék',
+    [130] = 'Világos kék', [131] = 'Fehér', [132] = 'Világos szürke', [133] = 'Szürke', [134] = 'Tiszta fehér',
+    [135] = 'Narancs', [136] = 'Piros', [137] = 'Piros', [138] = 'Zöld', [139] = 'Zöld',
+    [140] = 'Kék', [141] = 'Sötét kék', [142] = 'Sötét lila', [143] = 'Lila', [144] = 'Sötét piros',
+    [145] = 'Piros', [146] = 'Sárga', [147] = 'Narancs', [148] = 'Zöld', [149] = 'Kék',
+    [150] = 'Ezüst metál', [151] = 'Arany metál', [152] = 'Zöld metál', [153] = 'Kék metál', [154] = 'Fekete metál',
+    [155] = 'Piros metál', [156] = 'Sötét zöld', [157] = 'Sötét barna', [158] = 'Barna', [159] = 'Bézs',
+    [160] = 'Anthracite szürke'
 }
 
 Config.WindowTintNames = {
