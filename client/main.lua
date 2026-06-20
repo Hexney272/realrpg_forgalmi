@@ -356,9 +356,7 @@ local function collectVehicleData(vehicle)
         makeName = getLabelFromDisplay(make)
     end
 
-    -- Várunk hogy a vms_tuning és egyéb scriptek biztosan betöltsék a modokat
-    SetVehicleModKit(vehicle, 0)
-    Wait(2000)
+    -- SetVehicleModKit szükséges hogy a GetVehicleMod helyes értéket adjon
     SetVehicleModKit(vehicle, 0)
     local snapshot = getVehicleModSnapshot(vehicle)
     local display = getVehicleDisplayData(vehicle, modelName, modelLabel)
