@@ -357,6 +357,9 @@ local function collectVehicleData(vehicle)
         makeName = getLabelFromDisplay(make)
     end
 
+    -- Várunk egy kicsit hogy a vms_tuning/egyéb scriptek biztosan betöltsék a modokat
+    SetVehicleModKit(vehicle, 0)
+    Wait(500)
     SetVehicleModKit(vehicle, 0)
     local snapshot = getVehicleModSnapshot(vehicle)
     local display = getVehicleDisplayData(vehicle, modelName, modelLabel)
@@ -560,6 +563,20 @@ RegisterNUICallback('officeAction', function(payload, cb)
     local plate = payload.plate
 
     if action == 'issueDocument' then
+        -- Friss jármű adatok küldése a szervernek (ha a jármű a közelben van)
+        local vehicle = getTargetVehicle()
+        if vehicle ~= 0 then
+            local vPlate = trimPlate(GetVehicleNumberPlateText(vehicle))
+            if vPlate == trimPlate(plate) then
+                local freshData = collectVehicleData(vehicle)
+                if freshData then
+                    TriggerServerEvent('realrpg_forgalmi:server:issueDocument', freshData)
+                    cb(true)
+                    return
+                end
+            end
+        end
+        -- Ha nincs közelben a jármű, fallback a DB-ből
         TriggerServerEvent('realrpg_forgalmi:server:issueDocumentByPlate', plate)
     elseif action == 'buyInsurance' then
         TriggerServerEvent('realrpg_forgalmi:server:buyInsuranceByPlate', plate)
