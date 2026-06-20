@@ -357,9 +357,9 @@ local function collectVehicleData(vehicle)
         makeName = getLabelFromDisplay(make)
     end
 
-    -- Várunk egy kicsit hogy a vms_tuning/egyéb scriptek biztosan betöltsék a modokat
+    -- Várunk hogy a vms_tuning és egyéb scriptek biztosan betöltsék a modokat
     SetVehicleModKit(vehicle, 0)
-    Wait(500)
+    Wait(2000)
     SetVehicleModKit(vehicle, 0)
     local snapshot = getVehicleModSnapshot(vehicle)
     local display = getVehicleDisplayData(vehicle, modelName, modelLabel)
@@ -820,6 +820,14 @@ CreateThread(function()
         local vehicle = GetVehiclePedIsIn(ped, false)
 
         if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
+            -- Várunk hogy a vms_tuning és egyéb scriptek biztosan betöltsék a modokat
+            Wait(3000)
+            -- Újra ellenőrizzük hogy még mindig a járműben ülünk-e
+            if GetVehiclePedIsIn(PlayerPedId(), false) ~= vehicle then goto continue end
+
+            SetVehicleModKit(vehicle, 0)
+            Wait(200)
+
             local data = collectVehicleData(vehicle)
             if data then
                 local now = GetGameTimer()
@@ -831,6 +839,7 @@ CreateThread(function()
                 end
             end
         end
+        ::continue::
     end
 end)
 

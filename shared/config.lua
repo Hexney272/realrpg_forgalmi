@@ -41,7 +41,7 @@ Config.Fuel = {
 
 -- Automatikusan érvényteleníti a forgalmit, ha a jármű tuning / festés / optika változik.
 Config.InvalidateOnModification = true
-Config.ModificationCheckIntervalMs = 12000
+Config.ModificationCheckIntervalMs = 30000
 Config.VehicleSearchRadius = 8.0
 
 -- NPC-k / helyszínek. Írd át a saját pályádhoz.

@@ -740,29 +740,58 @@ RegisterNetEvent('realrpg_forgalmi:server:modificationCheck', function(vehicleDa
     local key = src .. ':' .. data.plate
     local now = GetGameTimer()
     if lastModCheck[key] and now - lastModCheck[key] < (Config.ModificationCheckIntervalMs - 1000) then return end
-    lastModCheck[key] = now
 
     local doc = getDocumentByPlate(data.plate)
-    if not doc or doc.status ~= 'valid' then return end
-    if not doc.mod_hash or doc.mod_hash == '' then return end
+    if not doc or doc.status ~= 'valid' then
+        lastModCheck[key] = now
+        return
+    end
+    if not doc.mod_hash or doc.mod_hash == '' then
+        lastModCheck[key] = now
+        return
+    end
 
-    if tostring(doc.mod_hash) ~= tostring(data.modHash) then
-        MySQL.update.await([[
-            UPDATE `vehicle_documents`
-            SET `status` = 'invalid',
-                `invalid_reason` = 'A jármű módosítva lett a forgalmi kiállítása után',
-                `last_seen_hash` = ?,
-                `display_data` = ?,
-                `properties` = ?
-            WHERE `plate` = ? AND `status` = 'valid'
-        ]], {
-            data.modHash,
-            safeEncode(data.display or {}),
-            safeEncode(data.properties or {}),
-            data.plate
+    -- Az ELSŐ ellenőrzésnél (járműbe ülés után) frissítjük a last_seen_hash-t
+    -- de NEM érvénytelenítünk. Csak ha a 2. ellenőrzés is mást mutat.
+    if not lastModCheck[key] then
+        -- Ez az első check erre a plate-re – csak mentjük a hash-t, nem invalidálunk
+        lastModCheck[key] = now
+        -- Frissítjük a DB-ben a last_seen_hash-t a jelenlegi állapotra
+        MySQL.update.await('UPDATE `vehicle_documents` SET `last_seen_hash` = ? WHERE `plate` = ? AND `status` = ?', {
+            data.modHash, data.plate, 'valid'
         })
+        return
+    end
 
-        notify(src, ('A(z) %s rendszámú jármű forgalmija ÉRVÉNYTELEN lett, mert a jármű módosítva lett.'):format(data.plate), 'error')
+    lastModCheck[key] = now
+
+    -- Összehasonlítás: a DB-ben tárolt mod_hash vs kliens hash
+    if tostring(doc.mod_hash) ~= tostring(data.modHash) then
+        -- Második ellenőrzés: ha a last_seen_hash sem egyezik, AKKOR érvénytelenítünk
+        -- (Ha a last_seen_hash egyezik a jelenlegi hash-sel, az azt jelenti csak betöltési késleltetés volt)
+        if doc.last_seen_hash and tostring(doc.last_seen_hash) == tostring(data.modHash) then
+            -- A jármű állapota stabil (az előző check-nél is ezt láttuk) de eltér a forgalmi kiállításkori hash-től
+            MySQL.update.await([[
+                UPDATE `vehicle_documents`
+                SET `status` = 'invalid',
+                    `invalid_reason` = 'A jármű módosítva lett a forgalmi kiállítása után',
+                    `last_seen_hash` = ?,
+                    `display_data` = ?,
+                    `properties` = ?
+                WHERE `plate` = ? AND `status` = 'valid'
+            ]], {
+                data.modHash,
+                safeEncode(data.display or {}),
+                safeEncode(data.properties or {}),
+                data.plate
+            })
+            notify(src, ('A(z) %s rendszámú jármű forgalmija ÉRVÉNYTELEN lett, mert a jármű módosítva lett.'):format(data.plate), 'error')
+        else
+            -- Első eltérés: csak mentjük az állapotot, következő check-nél döntünk
+            MySQL.update.await('UPDATE `vehicle_documents` SET `last_seen_hash` = ? WHERE `plate` = ?', {
+                data.modHash, data.plate
+            })
+        end
     end
 end)
 
