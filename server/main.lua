@@ -514,6 +514,41 @@ local function buildDocumentPayload(doc)
     display.tax = doc.tax_paid_until and humanDate(doc.tax_paid_until) or 'nincs'
     display.wanted = tonumber(doc.wanted) == 1 and 'KÖRÖZÖTT' or 'nem'
 
+    -- Friss tuning adatok beolvasása az owned_vehicles-ből
+    local owned = getOwnedVehicle(doc.plate)
+    if owned and owned.vehicle and owned.vehicle ~= '' then
+        local vehData = safeDecode(owned.vehicle)
+        if vehData then
+            local levelNames = { [0] = 'Sufni', [1] = 'Utcai', [2] = 'Verseny', [3] = 'Phantom', [4] = 'Phantom+', [5] = 'Phantom Elite' }
+            local function modName(modValue)
+                if not modValue or modValue < 0 then return 'Gyári' end
+                return levelNames[modValue] or ('Szint ' .. tostring(modValue + 1))
+            end
+            if vehData.modEngine ~= nil then
+                display.engine = modName(vehData.modEngine)
+                display.brakes = modName(vehData.modBrakes)
+                display.transmission = modName(vehData.modTransmission)
+                display.suspension = modName(vehData.modSuspension)
+                display.turbo = vehData.modTurbo and 'Verseny' or 'Gyári'
+                display.weightReduction = vehData.modArmor and vehData.modArmor >= 0 and 'Egyedi' or 'Gyári'
+            elseif type(vehData.mods) == 'table' then
+                local mods = vehData.mods
+                local engine = mods[11] or mods['11']
+                local brakes = mods[12] or mods['12']
+                local transmission = mods[13] or mods['13']
+                local suspension = mods[15] or mods['15']
+                local turbo = mods[18] or mods['18']
+                local armor = mods[16] or mods['16']
+                if engine then display.engine = modName(tonumber(engine)) end
+                if brakes then display.brakes = modName(tonumber(brakes)) end
+                if transmission then display.transmission = modName(tonumber(transmission)) end
+                if suspension then display.suspension = modName(tonumber(suspension)) end
+                if turbo and tonumber(turbo) >= 0 then display.turbo = 'Verseny' else display.turbo = display.turbo or 'Gyári' end
+                if armor and tonumber(armor) >= 0 then display.weightReduction = 'Egyedi' end
+            end
+        end
+    end
+
     return {
         serial = doc.serial or randomSerial(),
         status = doc.status,
@@ -1272,13 +1307,52 @@ RegisterNetEvent('realrpg_forgalmi:server:issueDocumentByPlate', function(plate)
         return
     end
 
+    -- Friss tuning adatok beolvasása az owned_vehicles táblából (ahol a vms_tuning tárolja)
+    local display = safeDecode(doc.display_data)
+    local vehicleJson = owned.vehicle
+    if vehicleJson and vehicleJson ~= '' then
+        local vehData = safeDecode(vehicleJson)
+        if vehData then
+            local levelNames = { [0] = 'Sufni', [1] = 'Utcai', [2] = 'Verseny', [3] = 'Phantom', [4] = 'Phantom+', [5] = 'Phantom Elite' }
+            local function modName(modValue)
+                if not modValue or modValue < 0 then return 'Gyári' end
+                return levelNames[modValue] or ('Szint ' .. tostring(modValue + 1))
+            end
+
+            -- A vehicle JSON-ban a mods a GTA mod indexek szerint vannak
+            local mods = vehData.mods or vehData.modEngine and vehData or {}
+            if vehData.modEngine ~= nil then
+                display.engine = modName(vehData.modEngine)
+                display.brakes = modName(vehData.modBrakes)
+                display.transmission = modName(vehData.modTransmission)
+                display.suspension = modName(vehData.modSuspension)
+                display.turbo = vehData.modTurbo and 'Verseny' or 'Gyári'
+                display.weightReduction = vehData.modArmor and vehData.modArmor >= 0 and 'Egyedi' or 'Gyári'
+            elseif type(mods) == 'table' then
+                -- ESX vehicle properties format: mods[11] = engine, mods[12] = brakes, etc.
+                local engine = mods[11] or mods['11']
+                local brakes = mods[12] or mods['12']
+                local transmission = mods[13] or mods['13']
+                local suspension = mods[15] or mods['15']
+                local turbo = mods[18] or mods['18']
+                local armor = mods[16] or mods['16']
+                if engine then display.engine = modName(tonumber(engine)) end
+                if brakes then display.brakes = modName(tonumber(brakes)) end
+                if transmission then display.transmission = modName(tonumber(transmission)) end
+                if suspension then display.suspension = modName(tonumber(suspension)) end
+                if turbo and tonumber(turbo) >= 0 then display.turbo = 'Verseny' else display.turbo = display.turbo or 'Gyári' end
+                if armor and tonumber(armor) >= 0 then display.weightReduction = 'Egyedi' end
+            end
+        end
+    end
+
     local data = {
         plate = plate,
         modelName = doc.model_name or 'unknown',
         modelLabel = doc.model_label or 'Ismeretlen',
         makeName = '',
         modHash = doc.mod_hash or doc.last_seen_hash or '',
-        display = safeDecode(doc.display_data),
+        display = display,
         properties = safeDecode(doc.properties)
     }
 

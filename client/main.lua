@@ -149,20 +149,20 @@ local function rgbToName(r, g, b)
 end
 
 local tuningLevelNames = {
-    [1] = 'Sufni',
-    [2] = 'Utcai',
-    [3] = 'Verseny',
-    [4] = 'Phantom',
-    [5] = 'Phantom+',
-    [6] = 'Phantom Elite',
+    [0] = 'Sufni',
+    [1] = 'Utcai',
+    [2] = 'Verseny',
+    [3] = 'Phantom',
+    [4] = 'Phantom+',
+    [5] = 'Phantom Elite',
 }
 
 local function modLevelLabel(vehicle, modType, prefix)
     local value = GetVehicleMod(vehicle, modType)
     if value == nil or value < 0 then return 'Gyári' end
-    local level = value + 1
-    local name = tuningLevelNames[level]
+    local name = tuningLevelNames[value]
     if name then return name end
+    local level = value + 1
     return (prefix or 'Tuning') .. ' ' .. tostring(level)
 end
 
