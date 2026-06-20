@@ -131,7 +131,7 @@ local function getOwnedVehicle(plate)
     if not normalized then return nil end
 
     local query = ([[
-        SELECT `%s` AS owner, `%s` AS plate, `%s` AS vehicle
+        SELECT `%s` AS owner, `%s` AS plate, `%s` AS vehicle, `tuning_data`
         FROM `%s`
         WHERE REPLACE(UPPER(`%s`), ' ', '') = ?
         LIMIT 1
@@ -289,6 +289,58 @@ local function tuffExhaustLabel(data)
     return label
 end
 
+-- Engine swap soundModel → label mapping (a vms_tuning Config.EngineSwaps alapján)
+local engineSwapLabels = {
+    ['blista'] = '1.2 R4',
+    ['pony'] = '1.8 I4',
+    ['futo'] = '2.0 R4',
+    ['buffalo'] = '2.5 I4',
+    ['kuruma'] = '3.0 V6',
+    ['brawler'] = '3.5 V6',
+    ['casco'] = '4.0 V8',
+    ['blade'] = '5.5 V8',
+    ['ratloader2'] = '6.2 V8',
+    ['penetrator'] = '7.0 V12',
+    ['gp1'] = '7.2 V12',
+    ['btype2'] = '8.0 W16',
+    ['n55b30t0'] = 'Übermacht (N55 V6)',
+    ['s55b30'] = 'Übermacht (S55 V6)',
+    ['mercedesm113'] = 'Benefactor (M113 V8)',
+    ['mercedesm155'] = 'Benefactor (M155 V8)',
+    ['ta176m177'] = 'Benefactor (M177 V8)',
+    ['ta178amgb'] = 'Benefactor (M178 V8)',
+    ['ta023l539'] = 'Pegassi (L539 V12)',
+}
+
+local function getEngineSwapLabel(plate)
+    local owned = getOwnedVehicle(plate)
+    if not owned then return 'Gyári' end
+
+    -- Próbáljuk a tuning_data oszlopból kiolvasni
+    if owned.tuning_data and owned.tuning_data ~= '' then
+        local ok, td = pcall(json.decode, owned.tuning_data)
+        if ok and type(td) == 'table' then
+            local swap = td.engineSwap or td.engine_swap or td.soundModel
+            if swap and swap ~= '' then
+                return engineSwapLabels[swap] or swap
+            end
+        end
+    end
+
+    -- Fallback: a vehicle JSON-ban is lehet engineSwap mező
+    if owned.vehicle and owned.vehicle ~= '' then
+        local ok2, vd = pcall(json.decode, owned.vehicle)
+        if ok2 and type(vd) == 'table' then
+            local swap = vd.engineSwap or vd.engine_swap
+            if swap and swap ~= '' then
+                return engineSwapLabels[swap] or swap
+            end
+        end
+    end
+
+    return 'Gyári'
+end
+
 local function ensureVehicleData(data)
     if type(data) ~= 'table' then return nil, 'Hibás jármű adat.' end
     local plate = trimPlate(data.plate)
@@ -351,7 +403,7 @@ local function makeDisplayData(data, ownerName, vin, engineCode, validUntil, iss
     display.plate = data.plate
     display.identifier = display.identifier or '10'
     display.fuel = Config.VehicleFuelText[data.modelName] or display.fuel or Config.Document.DefaultFuelText
-    display.tier = display.tier or Config.Document.DefaultTier
+    display.tier = getEngineSwapLabel(data.plate)
     display.inspectionValidUntil = humanDate(validUntil)
     display.issueDate = humanDate(issueDate or sqlNow())
 
@@ -616,7 +668,7 @@ local function buildDocumentPayload(doc)
     display.vin = doc.vin or display.vin or 'nincs'
     display.engineCode = doc.engine_code or display.engineCode or 'nincs'
     display.fuel = doc.fuel_text or display.fuel or Config.Document.DefaultFuelText
-    display.tier = doc.tier or display.tier or Config.Document.DefaultTier
+    display.tier = getEngineSwapLabel(doc.plate)
     display.inspectionValidUntil = humanDate(doc.inspection_valid_until)
     display.issueDate = humanDate(doc.issued_at or doc.inspection_done_at)
     display.docUid = doc.doc_uid or doc.serial

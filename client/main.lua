@@ -295,7 +295,6 @@ local function getVehicleDisplayData(vehicle, modelName, modelLabel)
     local neonR, neonG, neonB = GetVehicleNeonLightsColour(vehicle)
     local fuelText = Config.VehicleFuelText[modelName] or Config.Document.DefaultFuelText
     local engineLevel = GetVehicleMod(vehicle, 11)
-    local tier = engineLevel and engineLevel >= 0 and (engineLevel + 1) or Config.Document.DefaultTier
     local xenonOn = IsToggleModOn(vehicle, 22)
     local xenonColor = GetVehicleXenonLightsColor(vehicle)
     local neon = neonLayout(vehicle)
@@ -303,7 +302,7 @@ local function getVehicleDisplayData(vehicle, modelName, modelLabel)
     return {
         type = modelLabel,
         fuel = fuelText,
-        tier = tier,
+        tier = 'Gyári',
         paintJob = 'nincs',
         roofPaint = 'nincs',
         primaryColor = colorName(c1),
