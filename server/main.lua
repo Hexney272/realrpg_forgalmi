@@ -35,6 +35,18 @@ end
 
 local function humanDate(sqlDate)
     if not sqlDate then return 'nincs' end
+    
+    -- Ha szám (Unix timestamp, akár milliszekundumban)
+    local num = tonumber(sqlDate)
+    if num then
+        -- Ha milliszekundum (13 jegyű szám), konvertáljuk másodpercre
+        if num > 9999999999 then
+            num = math.floor(num / 1000)
+        end
+        return os.date('%Y. %m. %d. %H:%M', num)
+    end
+    
+    -- SQL DATETIME formátum parsing
     local y, m, d, h, mi = tostring(sqlDate):match('^(%d%d%d%d)%-(%d%d)%-(%d%d)%s+(%d%d):(%d%d)')
     if not y then
         y, m, d, h, mi = tostring(sqlDate):match('^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d)')
