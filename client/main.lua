@@ -148,14 +148,22 @@ local function rgbToName(r, g, b)
     return ('RGB %d %d %d'):format(r, g, b)
 end
 
+local tuningLevelNames = {
+    [1] = 'Sufni',
+    [2] = 'Utcai',
+    [3] = 'Verseny',
+    [4] = 'Phantom',
+    [5] = 'Phantom+',
+    [6] = 'Phantom Elite',
+}
+
 local function modLevelLabel(vehicle, modType, prefix)
     local value = GetVehicleMod(vehicle, modType)
-    if value == nil or value < 0 then return 'gyári' end
-    local count = GetNumVehicleMods(vehicle, modType)
-    if count and count > 0 then
-        return ('%s %d/%d'):format(prefix or 'Tuning', value + 1, count)
-    end
-    return (prefix or 'Tuning') .. ' ' .. tostring(value + 1)
+    if value == nil or value < 0 then return 'Gyári' end
+    local level = value + 1
+    local name = tuningLevelNames[level]
+    if name then return name end
+    return (prefix or 'Tuning') .. ' ' .. tostring(level)
 end
 
 local function wheelLabel(vehicle)
@@ -305,14 +313,14 @@ local function getVehicleDisplayData(vehicle, modelName, modelLabel)
         rim = wheelLabel(vehicle),
         rimPaint = colorName(wheelColor),
         rimSticker = 'nincs',
-        engine = modLevelLabel(vehicle, 11, 'Venom'),
-        turbo = IsToggleModOn(vehicle, 18) and 'Venom' or 'gyári',
-        transmission = modLevelLabel(vehicle, 13, 'Venom'),
-        ecu = engineLevel and engineLevel >= 0 and 'Venom' or 'gyári',
-        suspension = modLevelLabel(vehicle, 15, 'Venom'),
-        tires = GetVehicleMod(vehicle, 23) >= 0 and 'Venom' or 'gyári',
-        brakes = modLevelLabel(vehicle, 12, 'Venom'),
-        weightReduction = GetVehicleMod(vehicle, 16) >= 0 and 'Venom' or 'gyári',
+        engine = modLevelLabel(vehicle, 11),
+        turbo = IsToggleModOn(vehicle, 18) and 'Verseny' or 'Gyári',
+        transmission = modLevelLabel(vehicle, 13),
+        ecu = engineLevel and engineLevel >= 0 and modLevelLabel(vehicle, 11) or 'Gyári',
+        suspension = modLevelLabel(vehicle, 15),
+        tires = GetVehicleMod(vehicle, 23) >= 0 and 'Egyedi' or 'Gyári',
+        brakes = modLevelLabel(vehicle, 12),
+        weightReduction = GetVehicleMod(vehicle, 16) >= 0 and 'Egyedi' or 'Gyári',
         frontCamber = 'gyári',
         rearCamber = 'gyári',
         frontTrack = 'gyári',
