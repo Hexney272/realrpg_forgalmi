@@ -404,54 +404,19 @@ local function collectVehicleData(vehicle)
         end
     end
 
-    -- tuff-nitro integráció (NOS, backfire, antilag)
-    if GetResourceState('tuff-nitro') == 'started' then
-        local okTuff, tuffData = pcall(function()
-            -- A tuff-nitro statebag-eken keresztül tárolja az adatokat
-            -- Alternatíva: Entity state 'tuff_nitro' ha elérhető
-            local state = Entity(vehicle).state
-            if state and state.tuff_nitro then
-                return state.tuff_nitro
-            end
-            return nil
-        end)
-
-        if okTuff and type(tuffData) == 'table' then
-            display.nitrous = tuffData.nitrousColor and ('NOS: ' .. tostring(tuffData.nitrousColor)) or 'nincs'
-            display.backfire = tuffData.hasExhaust and ('Tuff ' .. tostring(tuffData.exhaustId or 'exhaust')) or display.backfire
-            if tuffData.antilag2step then
-                local al = tuffData.antilag2step
-                if al.enableAntiLag then
-                    display.backfire = 'Antilag aktív'
-                end
-            end
-        else
-            display.nitrous = display.nitrous or 'nincs'
-        end
-    else
-        display.nitrous = 'nincs'
-    end
+    -- tuff-nitro adatokat a szerver oldal olvassa ki (Database.GetVehicleData export)
+    -- A kliens oldalon nem próbáljuk a statebag-ből olvasni mert nem megbízható
+    display.nitrous = 'nincs'
+    display.backfire = 'nincs'
 
     local props = {}
     if ESX.Game and ESX.Game.GetVehicleProperties then
         props = ESX.Game.GetVehicleProperties(vehicle) or {}
     end
 
-    -- tuff-nitro állapot hozzáadása a hash-hez (érvénytelenítés módosításkor)
-    if GetResourceState('tuff-nitro') == 'started' then
-        local okState, tuffState = pcall(function()
-            local state = Entity(vehicle).state
-            return state and state.tuff_nitro or nil
-        end)
-        if okState and type(tuffState) == 'table' then
-            snapshot.tuffNitro = {
-                color = tuffState.nitrousColor or tuffState.color,
-                exhaust = tuffState.exhaustId,
-                hasExhaust = tuffState.hasExhaust,
-                antilag = tuffState.antilag2step and tuffState.antilag2step.enableAntiLag
-            }
-        end
-    end
+    -- tuff-nitro állapot NEM kerül bele a hash-be
+    -- (a tuff-nitro adatokat a szerver oldalon az SQL/JSON-ból olvassuk ki,
+    -- nem a kliens statebag-ből - mert az késleltetve töltődik és hash eltérést okoz)
 
     local hash = tostring(GetHashKey(stableEncode(snapshot)))
 

@@ -208,11 +208,21 @@ local function getTuffNitroData(plate)
     if not plate then return nil end
     if GetResourceState('tuff-nitro') ~= 'started' then return nil end
 
+    -- Próbáljuk a tuff-nitro server export-ját használni
     local ok, data = pcall(function()
         return exports['tuff-nitro']:GetVehicleData(plate)
     end)
-
     if ok and type(data) == 'table' then return data end
+
+    -- Fallback: közvetlenül SQL-ből
+    local ok2, row = pcall(function()
+        return MySQL.single.await('SELECT `data` FROM `tuff_nitro_installs` WHERE `plate` = ? LIMIT 1', { plate })
+    end)
+    if ok2 and row and row.data then
+        local ok3, decoded = pcall(json.decode, row.data)
+        if ok3 and type(decoded) == 'table' then return decoded end
+    end
+
     return nil
 end
 
@@ -561,6 +571,20 @@ local function buildDocumentPayload(doc)
                 if turbo and tonumber(turbo) >= 0 then display.turbo = 'Verseny' else display.turbo = display.turbo or 'Gyári' end
                 if armor and tonumber(armor) >= 0 then display.weightReduction = 'Egyedi' end
             end
+        end
+    end
+
+    -- tuff-nitro adatok frissítése a szerver SQL/export-ból
+    local tuffData = getTuffNitroData(doc.plate)
+    if tuffData then
+        if tuffData.nitrousColor then
+            display.nitrous = 'NOS ' .. tostring(tuffData.nitrousColor)
+        end
+        if tuffData.hasExhaust and tuffData.exhaustId then
+            display.backfire = tostring(tuffData.exhaustId):gsub('exhaust_', '')
+        end
+        if tuffData.antilag2step and tuffData.antilag2step.enableAntiLag then
+            display.backfire = (display.backfire ~= 'nincs' and display.backfire or '') .. ' Antilag'
         end
     end
 
