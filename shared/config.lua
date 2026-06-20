@@ -58,14 +58,14 @@ Config.ServiceNpc = {
 -- A műszaki vizsga marker helye (ide kell a kocsival ráállni)
 Config.ServiceMarker = {
     Enabled = true,
-    Coords = vector3(-347.28, -133.46, 38.01),
-    Size = { x = 4.0, y = 4.0, z = 1.0 },     -- nagyobb, hogy autóval ráférj
-    Type = 1,                                     -- lapos kör marker
-    Color = { r = 100, g = 180, b = 255, a = 150 },
+    Coords = vector3(1204.05, -3117.48, 5.05),
+    Size = { x = 4.0, y = 4.0, z = 1.0 },
+    Type = 1,
+    Color = { r = 255, g = 200, b = 50, a = 150 },
     DrawDistance = 30.0,
-    InteractDistance = 5.0,                        -- 5m sugarú zóna
-    HelpText = '~INPUT_CONTEXT~ Műszaki vizsga indítása',
-    RequireVehicle = true                         -- járműben kell ülni
+    InteractDistance = 5.0,
+    HelpText = '~INPUT_CONTEXT~ Műszaki vizsga',
+    RequireVehicle = true
 }
 
 Config.OfficeNpc = {
