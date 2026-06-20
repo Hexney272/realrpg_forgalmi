@@ -454,7 +454,8 @@ local function issueDocument(src, data)
 
     local now = sqlNow()
     local ownerName = getOwnerName(owned.owner)
-    local validUntil = doc.inspection_valid_until
+    -- Az érvényesség a FORGALMI KIÁLLÍTÁSTÓL számított 15 nap (nem a vizsgától)
+    local validUntil = sqlDateAfterDays(Config.Inspection.ValidityDays)
     local vin = doc.vin and doc.vin ~= '' and doc.vin or vinFromPlate(data.plate)
     local engineCode = doc.engine_code and doc.engine_code ~= '' and doc.engine_code or engineCodeFromPlate(data.plate)
     local display = makeDisplayData(data, ownerName, vin, engineCode, validUntil, now)
@@ -471,6 +472,7 @@ local function issueDocument(src, data)
             `fuel_text` = ?,
             `tier` = ?,
             `issued_at` = ?,
+            `inspection_valid_until` = ?,
             `status` = 'valid',
             `invalid_reason` = NULL,
             `serial` = ?,
@@ -489,6 +491,7 @@ local function issueDocument(src, data)
         display.fuel,
         tonumber(display.tier) or Config.Document.DefaultTier,
         now,
+        validUntil,
         serial,
         safeEncode(display),
         safeEncode(data.properties),
