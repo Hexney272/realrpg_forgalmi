@@ -271,17 +271,8 @@ h1 {
     text-shadow: none;
     mix-blend-mode: multiply;
 }
-.document-paper.invalid .tag::after {
-    content: ' ÉRVÉNYTELEN';
-    color: rgba(180, 24, 24, .74);
-    background: rgba(255, 245, 210, .5);
-    border: 1px solid rgba(180, 24, 24, .45);
-    margin-left: 3px;
-    padding: 0 2px;
-    font-size: 8px;
-    line-height: 10px;
-    vertical-align: top;
-}
+/* Érvénytelen forgalminál NEM szúrunk be ÉRVÉNYTELEN szöveget minden tag mögé
+   (csak a nagy pecsét jelzi az érvénytelenséget) */
 @media (max-height: 760px) {
     .document-paper { transform: scale(.86); }
 }
