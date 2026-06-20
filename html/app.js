@@ -61,10 +61,6 @@ function openService(payload) {
         $('fuelRow').classList.add('hidden');
     }
 
-    $('repairTime').textContent = `${payload.duration?.repair || 0} perc`;
-    $('clubTime').textContent = `${payload.duration?.club || 0} perc`;
-    $('expectedTime').textContent = `${payload.duration?.expected || 0} perc`;
-
     documentApp.classList.add('hidden');
     serviceApp.classList.remove('hidden');
     updateServiceTotals();
