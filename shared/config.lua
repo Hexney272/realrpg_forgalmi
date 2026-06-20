@@ -45,13 +45,27 @@ Config.ModificationCheckIntervalMs = 30000
 Config.VehicleSearchRadius = 8.0
 
 -- NPC-k / helyszínek. Írd át a saját pályádhoz.
+-- MŰSZAKI VIZSGA: Marker ahova a járművel kell ráállni
 Config.ServiceNpc = {
-    Enabled = true,
+    Enabled = false,  -- NPC kikapcsolva, marker-alapú rendszert használunk
     Model = 's_m_m_autoshop_01',
     Coords = { x = -347.28, y = -133.46, z = 38.01, w = 70.0 },
     Label = 'Műszaki vizsga',
     Icon = 'fa-solid fa-screwdriver-wrench',
-    Name = 'Szabó Márk'  -- Ez jelenik meg az NPC feje felett
+    Name = 'Szabó Márk'
+}
+
+-- A műszaki vizsga marker helye (ide kell a kocsival ráállni)
+Config.ServiceMarker = {
+    Enabled = true,
+    Coords = vector3(-347.28, -133.46, 38.01),
+    Size = { x = 4.0, y = 4.0, z = 1.0 },     -- nagyobb, hogy autóval ráférj
+    Type = 1,                                     -- lapos kör marker
+    Color = { r = 100, g = 180, b = 255, a = 150 },
+    DrawDistance = 30.0,
+    InteractDistance = 5.0,                        -- 5m sugarú zóna
+    HelpText = '~INPUT_CONTEXT~ Műszaki vizsga indítása',
+    RequireVehicle = true                         -- járműben kell ülni
 }
 
 Config.OfficeNpc = {

@@ -450,9 +450,16 @@ local function getTargetVehicle()
 end
 
 local function openServiceMenu()
-    local vehicle = getTargetVehicle()
+    local ped = PlayerPedId()
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    
+    -- Ha járműben ülünk, azt használjuk. Ha nem, keresünk a közelben.
     if vehicle == 0 then
-        notify('Nincs jármű a közeledben.', 'error')
+        vehicle = getTargetVehicle()
+    end
+    
+    if vehicle == 0 then
+        notify('Ülj be a járműbe a műszaki vizsgához.', 'error')
         return
     end
 
@@ -775,6 +782,38 @@ CreateThread(function()
         local interactDistance = Config.Interaction.InteractDistance or 2.2
         local key = Config.Interaction.Key or 38
 
+        -- Műszaki vizsga MARKER (járművel kell ráállni)
+        if Config.ServiceMarker and Config.ServiceMarker.Enabled then
+            local c = Config.ServiceMarker.Coords
+            local dist = #(pcoords - c)
+            local smDraw = Config.ServiceMarker.DrawDistance or 30.0
+            local smInteract = Config.ServiceMarker.InteractDistance or 5.0
+            if dist <= smDraw then
+                sleep = 0
+                local sm = Config.ServiceMarker
+                DrawMarker(
+                    sm.Type or 1,
+                    c.x, c.y, c.z - 0.95,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    sm.Size.x or 4.0, sm.Size.y or 4.0, sm.Size.z or 1.0,
+                    sm.Color.r or 100, sm.Color.g or 180, sm.Color.b or 255, sm.Color.a or 150,
+                    false, true, 2, false, nil, nil, false
+                )
+                if dist <= smInteract then
+                    local vehicle = GetVehiclePedIsIn(ped, false)
+                    if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
+                        showHelpText(sm.HelpText or '~INPUT_CONTEXT~ Műszaki vizsga')
+                        if IsControlJustReleased(0, key) then
+                            openServiceMenu()
+                        end
+                    else
+                        showHelpText('Ülj be a járműbe a műszaki vizsgához!')
+                    end
+                end
+            end
+        end
+
+        -- Műszaki vizsga NPC (régi rendszer, ha engedélyezve van)
         if Config.ServiceNpc and Config.ServiceNpc.Enabled and Config.ServiceNpc.Coords then
             local c = Config.ServiceNpc.Coords
             local dist = #(pcoords - vector3(c.x, c.y, c.z))
