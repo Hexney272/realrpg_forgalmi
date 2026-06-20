@@ -229,7 +229,7 @@ Config.Extras = {
         Prefix = 'A'
     },
     WorkOrder = {
-        Enabled = true,
+        Enabled = false,
         ItemName = 'szerviz_munkalap'
     },
     SaleContract = {
