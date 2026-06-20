@@ -387,6 +387,32 @@ local function makeDisplayData(data, ownerName, vin, engineCode, validUntil, iss
     return display
 end
 
+-- Szerver oldali hash generálás az SQL adatokból (konzisztens, nincs timing probléma)
+local function generateServerSideHash(plate)
+    local hashParts = {}
+
+    -- 1. owned_vehicles.vehicle JSON (vms_tuning tuning adatok)
+    local owned = getOwnedVehicle(plate)
+    if owned and owned.vehicle and owned.vehicle ~= '' then
+        hashParts[#hashParts + 1] = tostring(owned.vehicle)
+    end
+
+    -- 2. tuff_nitro_installs.data (NOS/backfire adatok)
+    local tuffData = getTuffNitroData(plate)
+    if tuffData then
+        hashParts[#hashParts + 1] = tostring(tuffData.nitrousColor or '')
+        hashParts[#hashParts + 1] = tostring(tuffData.exhaustId or '')
+        hashParts[#hashParts + 1] = tostring(tuffData.hasExhaust or false)
+        if tuffData.antilag2step then
+            hashParts[#hashParts + 1] = tostring(tuffData.antilag2step.enableAntiLag or false)
+        end
+    end
+
+    if #hashParts == 0 then return nil end
+    local combined = table.concat(hashParts, '|')
+    return tostring(GetHashKey(combined))
+end
+
 local function upsertInspection(src, data, selectedFuel)
     if rejectBadVehicleCondition and rejectBadVehicleCondition(src, data) then return end
     local owned, xPlayer, ownerErr = validateOwner(src, data.plate)
@@ -733,33 +759,6 @@ RegisterNetEvent('realrpg_forgalmi:server:issueDocument', function(vehicleData)
 
     issueDocument(src, data)
 end)
-
--- Szerver oldali hash generálás az SQL adatokból (konzisztens, nincs timing probléma)
-local function generateServerSideHash(plate)
-    local hashParts = {}
-
-    -- 1. owned_vehicles.vehicle JSON (vms_tuning tuning adatok)
-    local owned = getOwnedVehicle(plate)
-    if owned and owned.vehicle and owned.vehicle ~= '' then
-        hashParts[#hashParts + 1] = tostring(owned.vehicle)
-    end
-
-    -- 2. tuff_nitro_installs.data (NOS/backfire adatok)
-    local tuffData = getTuffNitroData(plate)
-    if tuffData then
-        -- Csak a lényeges mezőket vesszük bele (amik változnak ha módosítanak)
-        hashParts[#hashParts + 1] = tostring(tuffData.nitrousColor or '')
-        hashParts[#hashParts + 1] = tostring(tuffData.exhaustId or '')
-        hashParts[#hashParts + 1] = tostring(tuffData.hasExhaust or false)
-        if tuffData.antilag2step then
-            hashParts[#hashParts + 1] = tostring(tuffData.antilag2step.enableAntiLag or false)
-        end
-    end
-
-    if #hashParts == 0 then return nil end
-    local combined = table.concat(hashParts, '|')
-    return tostring(GetHashKey(combined))
-end
 
 RegisterNetEvent('realrpg_forgalmi:server:modificationCheck', function(plate)
     if not Config.InvalidateOnModification then return end
