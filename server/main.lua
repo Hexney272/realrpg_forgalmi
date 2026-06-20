@@ -208,19 +208,30 @@ local function getTuffNitroData(plate)
     if not plate then return nil end
     if GetResourceState('tuff-nitro') ~= 'started' then return nil end
 
-    -- Próbáljuk a tuff-nitro server export-ját használni
+    -- 1. Próbáljuk a tuff-nitro server export-ját (memória cache-ből olvas)
     local ok, data = pcall(function()
         return exports['tuff-nitro']:GetVehicleData(plate)
     end)
     if ok and type(data) == 'table' then return data end
 
-    -- Fallback: közvetlenül SQL-ből
+    -- 2. Fallback: MySQL tábla
     local ok2, row = pcall(function()
         return MySQL.single.await('SELECT `data` FROM `tuff_nitro_installs` WHERE `plate` = ? LIMIT 1', { plate })
     end)
     if ok2 and row and row.data then
         local ok3, decoded = pcall(json.decode, row.data)
         if ok3 and type(decoded) == 'table' then return decoded end
+    end
+
+    -- 3. Fallback: JSON fájl olvasása közvetlenül (ha a tuff-nitro JSON módban fut)
+    local ok4, jsonRaw = pcall(function()
+        return LoadResourceFile('tuff-nitro', 'datas.json')
+    end)
+    if ok4 and jsonRaw and #jsonRaw > 2 then
+        local ok5, allData = pcall(json.decode, jsonRaw)
+        if ok5 and type(allData) == 'table' and allData[plate] then
+            return allData[plate]
+        end
     end
 
     return nil
@@ -623,6 +634,29 @@ local function buildDocumentPayload(doc)
                 if not modValue or modValue < 0 then return 'Gyári' end
                 return levelNames[modValue] or ('Szint ' .. tostring(modValue + 1))
             end
+            -- Szín kiolvasás a vehicle JSON-ból
+            local function colorLabel(idx)
+                idx = tonumber(idx)
+                if not idx then return nil end
+                return Config.ColorNames[idx] or ('szín #' .. idx)
+            end
+            if vehData.color1 ~= nil then
+                display.primaryColor = colorLabel(vehData.color1) or display.primaryColor
+            end
+            if vehData.color2 ~= nil then
+                display.secondaryColor = colorLabel(vehData.color2) or display.secondaryColor
+            end
+            if vehData.interiorColor ~= nil then
+                display.interiorColor = colorLabel(vehData.interiorColor) or display.interiorColor
+            end
+            if vehData.dashboardColor ~= nil then
+                display.dashboardColor = colorLabel(vehData.dashboardColor) or display.dashboardColor
+            end
+            if vehData.wheelColor ~= nil then
+                display.rimPaint = colorLabel(vehData.wheelColor) or display.rimPaint
+            end
+
+            -- Tuning szintek kiolvasása
             if vehData.modEngine ~= nil then
                 display.engine = modName(vehData.modEngine)
                 display.brakes = modName(vehData.modBrakes)
