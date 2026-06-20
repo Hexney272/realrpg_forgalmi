@@ -684,9 +684,17 @@ CreateThread(function()
     end
 
     if Config.Blips then
-        if Config.ServiceNpc and Config.ServiceNpc.Coords then
-            createBlip(Config.ServiceNpc.Coords, Config.Blips.Service)
+        -- Műszaki vizsga blip: a ServiceMarker koordinátáját használja (ha van), egyébként ServiceNpc
+        local serviceCoords = nil
+        if Config.ServiceMarker and Config.ServiceMarker.Enabled and Config.ServiceMarker.Coords then
+            serviceCoords = Config.ServiceMarker.Coords
+        elseif Config.ServiceNpc and Config.ServiceNpc.Coords then
+            serviceCoords = Config.ServiceNpc.Coords
         end
+        if serviceCoords then
+            createBlip(serviceCoords, Config.Blips.Service)
+        end
+
         if Config.OfficeNpc and Config.OfficeNpc.Coords then
             createBlip(Config.OfficeNpc.Coords, Config.Blips.Office)
         end
