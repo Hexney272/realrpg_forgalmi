@@ -226,6 +226,58 @@ local function getTuffNitroData(plate)
     return nil
 end
 
+-- Tuff-nitro szép nevek a forgalmihoz
+local tuffNosNames = {
+    ['blue'] = 'Kék NOS',
+    ['cyan'] = 'Cián NOS',
+    ['default'] = 'Alap NOS',
+    ['green'] = 'Zöld NOS',
+    ['orange'] = 'Narancs NOS',
+    ['pink'] = 'Rózsaszín NOS',
+    ['purple'] = 'Lila NOS',
+    ['red'] = 'Piros NOS',
+    ['white'] = 'Fehér NOS',
+    ['yellow'] = 'Sárga NOS',
+    ['blue_cyan_purple'] = 'Kék-Cián-Lila NOS',
+    ['purple_pink_blue'] = 'Lila-Rózsaszín-Kék NOS',
+    ['red_orange_yellow'] = 'Piros-Narancs-Sárga NOS',
+    ['green_cyan_blue'] = 'Zöld-Cián-Kék NOS',
+}
+
+local tuffExhaustNames = {
+    ['exhaust_blue'] = 'Kék Backfire',
+    ['exhaust_cyan'] = 'Cián Backfire',
+    ['exhaust_green'] = 'Zöld Backfire',
+    ['exhaust_orange'] = 'Narancs Backfire',
+    ['exhaust_pink'] = 'Rózsaszín Backfire',
+    ['exhaust_purple'] = 'Lila Backfire',
+    ['exhaust_red'] = 'Piros Backfire',
+    ['exhaust_white'] = 'Fehér Backfire',
+    ['exhaust_yellow'] = 'Sárga Backfire',
+    ['exhaust_custom'] = 'Egyedi Backfire',
+    ['exhaust_mix1'] = 'Mix 1 Backfire',
+    ['exhaust_mix2'] = 'Mix 2 Backfire',
+}
+
+local function tuffNosLabel(data)
+    if not data then return 'nincs' end
+    local color = data.nitrousColor or data.color
+    if not color or color == '' then return 'nincs' end
+    return tuffNosNames[color] or ('NOS ' .. tostring(color))
+end
+
+local function tuffExhaustLabel(data)
+    if not data or not data.hasExhaust then return 'nincs' end
+    local id = data.exhaustId
+    if not id or id == '' then return 'nincs' end
+    local label = tuffExhaustNames[id] or tostring(id):gsub('exhaust_', '') .. ' Backfire'
+    -- Antilag hozzáadás
+    if data.antilag2step and data.antilag2step.enableAntiLag then
+        label = label .. ' + Antilag'
+    end
+    return label
+end
+
 local function ensureVehicleData(data)
     if type(data) ~= 'table' then return nil, 'Hibás jármű adat.' end
     local plate = trimPlate(data.plate)
@@ -328,15 +380,8 @@ local function makeDisplayData(data, ownerName, vin, engineCode, validUntil, iss
     -- tuff-nitro adatok beépítése (szerver oldalon, a datas.json/mysql-ből)
     local tuffData = getTuffNitroData(data.plate)
     if tuffData then
-        if tuffData.nitrousColor then
-            display.nitrous = 'NOS ' .. tostring(tuffData.nitrousColor)
-        end
-        if tuffData.hasExhaust and tuffData.exhaustId then
-            display.backfire = 'Tuff ' .. tostring(tuffData.exhaustId):gsub('exhaust_', '')
-        end
-        if tuffData.antilag2step and tuffData.antilag2step.enableAntiLag then
-            display.backfire = (display.backfire or '') .. ' + Antilag'
-        end
+        display.nitrous = tuffNosLabel(tuffData)
+        display.backfire = tuffExhaustLabel(tuffData)
     end
 
     return display
@@ -577,15 +622,8 @@ local function buildDocumentPayload(doc)
     -- tuff-nitro adatok frissítése a szerver SQL/export-ból
     local tuffData = getTuffNitroData(doc.plate)
     if tuffData then
-        if tuffData.nitrousColor then
-            display.nitrous = 'NOS ' .. tostring(tuffData.nitrousColor)
-        end
-        if tuffData.hasExhaust and tuffData.exhaustId then
-            display.backfire = tostring(tuffData.exhaustId):gsub('exhaust_', '')
-        end
-        if tuffData.antilag2step and tuffData.antilag2step.enableAntiLag then
-            display.backfire = (display.backfire ~= 'nincs' and display.backfire or '') .. ' Antilag'
-        end
+        display.nitrous = tuffNosLabel(tuffData)
+        display.backfire = tuffExhaustLabel(tuffData)
     end
 
     return {
