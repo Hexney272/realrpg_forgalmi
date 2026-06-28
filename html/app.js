@@ -19,17 +19,24 @@ function post(name, data = {}) {
     }).catch(() => {});
 }
 
+// Null-biztos képernyő-kezelők: ha egy elem hiányzik, nem száll el a NUI.
+function hide(el) { if (el && el.classList) el.classList.add('hidden'); }
+function show(el) { if (el && el.classList) el.classList.remove('hidden'); }
+function hideAllScreens() {
+    hide(serviceApp);
+    hide(documentApp);
+    hide(officeApp);
+    hide(insuranceApp);
+    hide(contractApp);
+}
+
 function fmtMoney(value, currency) {
     const n = Number(value || 0);
     return n.toLocaleString('hu-HU').replace(/\s/g, ' ') + ' ' + (currency || 'Ft');
 }
 
 function closeAll() {
-    serviceApp.classList.add('hidden');
-    documentApp.classList.add('hidden');
-    officeApp.classList.add('hidden');
-    insuranceApp.classList.add('hidden');
-    contractApp.classList.add('hidden');
+    hideAllScreens();
     post('close');
 }
 
@@ -39,30 +46,30 @@ function updateServiceTotals() {
     if (selected.inspection) total += Number(serviceState.inspection?.price || 0);
     if (selected.fuel && serviceState.fuel?.enabled) total += Number(serviceState.fuel?.price || 0);
 
-    $('inspectionCheck').classList.toggle('checked', selected.inspection);
-    $('fuelCheck').classList.toggle('checked', selected.fuel);
-    $('totalPrice').textContent = fmtMoney(total, serviceState.currency);
-    $('payPrice').textContent = fmtMoney(total, serviceState.currency);
+    const ic = $('inspectionCheck'); if (ic) ic.classList.toggle('checked', selected.inspection);
+    const fc = $('fuelCheck'); if (fc) fc.classList.toggle('checked', selected.fuel);
+    const tp = $('totalPrice'); if (tp) tp.textContent = fmtMoney(total, serviceState.currency);
+    const pp = $('payPrice'); if (pp) pp.textContent = fmtMoney(total, serviceState.currency);
 }
 
 function openService(payload) {
     serviceState = payload;
     selected = { inspection: true, fuel: false };
 
-    $('serviceCompany').textContent = payload.company || 'REAL OF LOS SANTOS';
-    $('inspectionLabel').innerHTML = `${payload.inspection?.label || 'Műszaki vizsga'} <em>(${payload.inspection?.time || '00:15'})</em>`;
-    $('inspectionPrice').textContent = fmtMoney(payload.inspection?.price || 0, payload.currency);
+    const company = $('serviceCompany'); if (company) company.textContent = payload.company || 'REAL OF LOS SANTOS';
+    const insLabel = $('inspectionLabel'); if (insLabel) insLabel.innerHTML = `${payload.inspection?.label || 'Műszaki vizsga'} <em>(${payload.inspection?.time || '00:15'})</em>`;
+    const insPrice = $('inspectionPrice'); if (insPrice) insPrice.textContent = fmtMoney(payload.inspection?.price || 0, payload.currency);
 
     if (payload.fuel?.enabled) {
-        $('fuelRow').classList.remove('hidden');
-        $('fuelLabel').innerHTML = `${payload.fuel?.label || '5L üzemanyag'} <em>(${payload.fuel?.time || '00:05'})</em>`;
-        $('fuelPrice').textContent = fmtMoney(payload.fuel?.price || 0, payload.currency);
+        show($('fuelRow'));
+        const fuelLabel = $('fuelLabel'); if (fuelLabel) fuelLabel.innerHTML = `${payload.fuel?.label || '5L üzemanyag'} <em>(${payload.fuel?.time || '00:05'})</em>`;
+        const fuelPrice = $('fuelPrice'); if (fuelPrice) fuelPrice.textContent = fmtMoney(payload.fuel?.price || 0, payload.currency);
     } else {
-        $('fuelRow').classList.add('hidden');
+        hide($('fuelRow'));
     }
 
-    documentApp.classList.add('hidden');
-    serviceApp.classList.remove('hidden');
+    hide(documentApp);
+    show(serviceApp);
     updateServiceTotals();
 }
 
@@ -92,9 +99,12 @@ function openDocument(payload) {
     const f = payload.fields || {};
     const invalid = !!payload.invalid;
 
-    documentPaper.classList.toggle('invalid', invalid);
-    $('invalidStamp').classList.toggle('hidden', !invalid);
-    $('invalidStamp').textContent = payload.invalidText || 'ÉRVÉNYTELEN';
+    if (documentPaper) documentPaper.classList.toggle('invalid', invalid);
+    const stamp = $('invalidStamp');
+    if (stamp) {
+        stamp.classList.toggle('hidden', !invalid);
+        stamp.textContent = payload.invalidText || 'ÉRVÉNYTELEN';
+    }
 
     setText('docCity', f.cityName || 'Real City');
     setText('docTitle', f.title || 'Forgalmi engedély');
@@ -148,8 +158,8 @@ function openDocument(payload) {
     setText('f_neoncolor', f.neonColor);
     setText('f_issue', f.issueDate);
 
-    serviceApp.classList.add('hidden');
-    documentApp.classList.remove('hidden');
+    hide(serviceApp);
+    show(documentApp);
 }
 
 function openInsurance(payload) {
@@ -161,10 +171,8 @@ function openInsurance(payload) {
     setText('ins_issued', payload.issuedAt || '-');
     setText('ins_price', fmtMoney(payload.price, payload.currency));
 
-    serviceApp.classList.add('hidden');
-    documentApp.classList.add('hidden');
-    officeApp.classList.add('hidden');
-    insuranceApp.classList.remove('hidden');
+    hideAllScreens();
+    show(insuranceApp);
 }
 
 let contractState = null;
@@ -180,27 +188,26 @@ function openContract(payload) {
 
     const sigSeller = $('ct_sig_seller');
     const sigBuyer = $('ct_sig_buyer');
-    sigSeller.textContent = payload.sellerSigned ? payload.sellerName : '';
-    sigBuyer.textContent = payload.buyerSigned ? payload.buyerName : '';
+    if (sigSeller) sigSeller.textContent = payload.sellerSigned ? payload.sellerName : '';
+    if (sigBuyer) sigBuyer.textContent = payload.buyerSigned ? payload.buyerName : '';
 
     const signBtn = $('btnSign');
-    if (payload.role === 'seller' && !payload.sellerSigned) {
-        signBtn.textContent = 'Aláírás (Eladó)';
-        signBtn.classList.remove('signed');
-        signBtn.style.display = '';
-    } else if (payload.role === 'buyer' && !payload.buyerSigned) {
-        signBtn.textContent = 'Aláírás (Vevő)';
-        signBtn.classList.remove('signed');
-        signBtn.style.display = '';
-    } else {
-        signBtn.style.display = 'none';
+    if (signBtn) {
+        if (payload.role === 'seller' && !payload.sellerSigned) {
+            signBtn.textContent = 'Aláírás (Eladó)';
+            signBtn.classList.remove('signed');
+            signBtn.style.display = '';
+        } else if (payload.role === 'buyer' && !payload.buyerSigned) {
+            signBtn.textContent = 'Aláírás (Vevő)';
+            signBtn.classList.remove('signed');
+            signBtn.style.display = '';
+        } else {
+            signBtn.style.display = 'none';
+        }
     }
 
-    serviceApp.classList.add('hidden');
-    documentApp.classList.add('hidden');
-    officeApp.classList.add('hidden');
-    insuranceApp.classList.add('hidden');
-    contractApp.classList.remove('hidden');
+    hideAllScreens();
+    show(contractApp);
 }
 
 window.addEventListener('message', (event) => {
@@ -211,11 +218,7 @@ window.addEventListener('message', (event) => {
     if (data.action === 'openInsurance') openInsurance(data.payload || {});
     if (data.action === 'openContract') openContract(data.payload || {});
     if (data.action === 'forceClose') {
-        serviceApp.classList.add('hidden');
-        documentApp.classList.add('hidden');
-        officeApp.classList.add('hidden');
-        insuranceApp.classList.add('hidden');
-        contractApp.classList.add('hidden');
+        hideAllScreens();
     }
 });
 
@@ -225,17 +228,19 @@ window.addEventListener('keydown', (event) => {
 
 document.querySelectorAll('[data-close="true"]').forEach((btn) => btn.addEventListener('click', closeAll));
 
-document.querySelector('[data-row="inspection"]').addEventListener('click', () => {
+const inspectionRow = document.querySelector('[data-row="inspection"]');
+if (inspectionRow) inspectionRow.addEventListener('click', () => {
     selected.inspection = !selected.inspection;
     updateServiceTotals();
 });
 
-document.querySelector('[data-row="fuel"]').addEventListener('click', () => {
+document.querySelector('[data-row="fuel"]') && document.querySelector('[data-row="fuel"]').addEventListener('click', () => {
     selected.fuel = !selected.fuel;
     updateServiceTotals();
 });
 
-$('serviceSubmit').addEventListener('click', () => {
+const serviceSubmitBtn = $('serviceSubmit');
+if (serviceSubmitBtn) serviceSubmitBtn.addEventListener('click', () => {
     if (!serviceState) return;
     if (!selected.inspection && !selected.fuel) return;
 
@@ -245,7 +250,7 @@ $('serviceSubmit').addEventListener('click', () => {
         fuel: selected.fuel
     };
 
-    serviceApp.classList.add('hidden');
+    hide(serviceApp);
     post('serviceSubmit', payload);
 });
 
@@ -257,54 +262,58 @@ function openOffice(payload) {
     const list = $('officeVehicleList');
     const vehicles = payload.vehicles || [];
 
-    if (vehicles.length === 0) {
-        list.innerHTML = '<div style="color:rgba(255,255,255,.5);text-align:center;padding:20px;font-size:13px;">Nincs elérhető jármű.</div>';
-    } else {
-        list.innerHTML = vehicles.map(v => `
-            <div class="office-vehicle-item" data-plate="${v.plate}">
-                <div>
-                    <div class="plate">${v.plate}</div>
-                    <div class="model">${v.model_label || 'Ismeretlen'}</div>
+    if (list) {
+        if (vehicles.length === 0) {
+            list.innerHTML = '<div style="color:rgba(255,255,255,.5);text-align:center;padding:20px;font-size:13px;">Nincs elérhető jármű.</div>';
+        } else {
+            list.innerHTML = vehicles.map(v => `
+                <div class="office-vehicle-item" data-plate="${v.plate}">
+                    <div>
+                        <div class="plate">${v.plate}</div>
+                        <div class="model">${v.model_label || 'Ismeretlen'}</div>
+                    </div>
+                    <span class="status ${v.status}">${v.status === 'valid' ? 'Forgalmi OK' : 'Vizsgázott'}</span>
                 </div>
-                <span class="status ${v.status}">${v.status === 'valid' ? 'Forgalmi OK' : 'Vizsgázott'}</span>
-            </div>
-        `).join('');
+            `).join('');
+        }
     }
 
-    $('officeActions').classList.add('hidden');
-    $('officeSelected').textContent = '-';
+    hide($('officeActions'));
+    const sel = $('officeSelected'); if (sel) sel.textContent = '-';
 
-    serviceApp.classList.add('hidden');
-    documentApp.classList.add('hidden');
-    officeApp.classList.remove('hidden');
+    hide(serviceApp);
+    hide(documentApp);
+    show(officeApp);
 
     // Bind vehicle clicks
-    list.querySelectorAll('.office-vehicle-item').forEach(el => {
-        el.addEventListener('click', () => {
-            list.querySelectorAll('.office-vehicle-item').forEach(e => e.classList.remove('active'));
-            el.classList.add('active');
-            selectedPlate = el.dataset.plate;
-            $('officeSelected').textContent = 'Kiválasztva: ' + selectedPlate;
-            $('officeActions').classList.remove('hidden');
+    if (list) {
+        list.querySelectorAll('.office-vehicle-item').forEach(el => {
+            el.addEventListener('click', () => {
+                list.querySelectorAll('.office-vehicle-item').forEach(e => e.classList.remove('active'));
+                el.classList.add('active');
+                selectedPlate = el.dataset.plate;
+                const s = $('officeSelected'); if (s) s.textContent = 'Kiválasztva: ' + selectedPlate;
+                show($('officeActions'));
+            });
         });
-    });
+    }
 }
 
 document.addEventListener('click', (e) => {
     if (e.target.id === 'btnIssueDoc' && selectedPlate) {
-        officeApp.classList.add('hidden');
+        hide(officeApp);
         post('officeAction', { action: 'issueDocument', plate: selectedPlate });
     }
     if (e.target.id === 'btnInsurance' && selectedPlate) {
-        officeApp.classList.add('hidden');
+        hide(officeApp);
         post('officeAction', { action: 'buyInsurance', plate: selectedPlate });
     }
     if (e.target.id === 'btnTax' && selectedPlate) {
-        officeApp.classList.add('hidden');
+        hide(officeApp);
         post('officeAction', { action: 'payTax', plate: selectedPlate });
     }
     if (e.target.id === 'btnReplace' && selectedPlate) {
-        officeApp.classList.add('hidden');
+        hide(officeApp);
         post('officeAction', { action: 'replaceDocument', plate: selectedPlate });
     }
 });
@@ -314,7 +323,7 @@ document.addEventListener('click', function(e) {
     if (e.target.id === 'btnSign' && contractState) {
         e.target.classList.add('signed');
         e.target.textContent = 'Aláírva';
-        contractApp.classList.add('hidden');
+        hide(contractApp);
         post('contractSign', { plate: contractState.plate, role: contractState.role });
     }
 });
