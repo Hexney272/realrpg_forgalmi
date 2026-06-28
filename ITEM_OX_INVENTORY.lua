@@ -1,4 +1,7 @@
--- Ezt másold az ox_inventory/data/items.lua fájlba:
+-- Ezt másold az ox_inventory/data/items.lua (vagy az egyéni inventory items listája) fájlba.
+-- FONTOS: a category = 'docs' biztosítja, hogy a dokumentumok a "Dokumentumok"
+-- fülre kerüljenek (nem a Tárgyak fülre), így nem írja azt hogy "nincs hely",
+-- amikor a Tárgyak fül tele van.
 
 ['forgalmi_engedely'] = {
     label = 'Forgalmi engedély',
@@ -6,6 +9,7 @@
     stack = false,
     close = true,
     consume = 0,
+    category = 'docs',
     description = 'Jármű forgalmi engedély',
     client = {
         image = 'forgalmi_engedely.png',
@@ -19,6 +23,7 @@
     stack = false,
     close = true,
     consume = 0,
+    category = 'docs',
     description = 'Járműhöz tartozó szerviz munkalap',
     client = { image = 'szerviz_munkalap.png' }
 },
@@ -29,8 +34,20 @@
     stack = false,
     close = true,
     consume = 0,
+    category = 'docs',
     description = 'Jármű adásvételi szerződés',
     client = { image = 'adasveteli_szerzodes.png' }
+},
+
+['kotelezo_biztositas'] = {
+    label = 'Kötelező biztosítás',
+    weight = 20,
+    stack = false,
+    close = true,
+    consume = 0,
+    category = 'docs',
+    description = 'Kötelező gépjármű-felelősségbiztosítás',
+    client = { image = 'kotelezo_biztositas.png' }
 },
 
 ['hamis_forgalmi'] = {
@@ -39,6 +56,7 @@
     stack = false,
     close = true,
     consume = 0,
+    category = 'docs',
     description = 'Hamisított jármű forgalmi engedély',
     client = {
         image = 'hamis_forgalmi.png',
